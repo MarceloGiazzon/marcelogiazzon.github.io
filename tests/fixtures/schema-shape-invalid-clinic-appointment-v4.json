@@ -1,0 +1,243 @@
+{
+  "schemaVersion": "npdev-static-generator-artifact-bundle.v4",
+  "project": {
+    "name": "Clinic Appointment Manager",
+    "scenarioId": "clinic-appointment-manager",
+    "objective": "Receptionists register patients and doctors, schedule appointments, change appointment status, and inspect runtime evidence.",
+    "assumptions": [
+      "This fixture intentionally avoids earlier forbidden reference/enum/datetime features so schema-shape validation is isolated."
+    ],
+    "warnings": [
+      "Expected to fail Safe Beta0 schema shape validation."
+    ]
+  },
+  "artifacts": [
+    {
+      "path": "config.json",
+      "content": {
+        "$schema": "contracts/config.schema.json",
+        "configVersion": "1.0",
+        "scenario": {
+          "name": "Clinic Appointment Manager",
+          "description": "Invalid schema-shape fixture.",
+          "outputRoot": "output/clinic-appointment-manager"
+        },
+        "generator": {
+          "failIfModelMissing": true,
+          "failIfConfigMissing": true,
+          "cleanOutputBeforeGenerate": true,
+          "emitPluginAssets": true,
+          "emitRuntimeAssets": true,
+          "emitUiAssets": true
+        },
+        "bootstrap": {
+          "root": "bootstrap",
+          "mergeStrategy": "clean-copy"
+        },
+        "artifact": {
+          "root": "artifacts",
+          "generatedFolderName": "npdev-generated",
+          "libsFolderName": "libs",
+          "metaFolderName": "npdev-meta"
+        },
+        "finalExec": {
+          "root": "final-exec",
+          "deleteBeforeMount": true
+        },
+        "database": {
+          "provider": "docker-postgres",
+          "host": "localhost",
+          "port": 5432,
+          "database": "clinic_appointment_manager",
+          "username": "finalexec",
+          "password": "finalexec",
+          "adminDatabase": "postgres",
+          "resetMode": "reset",
+          "containerName": "npdev-clinic-appointment-manager"
+        },
+        "runtime": {
+          "springProfile": "default",
+          "serverPort": 8083,
+          "javaArgs": [],
+          "gradleTask": "bootRun"
+        },
+        "trialDefaults": {
+          "apiKey": "YOUR_API_KEY_HERE"
+        }
+      }
+    },
+    {
+      "path": "model.json",
+      "content": {
+        "$schema": "contracts/model.schema.json",
+        "namespace": "trial.clinicappointmentmanager",
+        "dslVersion": "1.0.0",
+        "version": "1.0",
+        "concepts": [
+          {
+            "name": "Appointment",
+            "fields": [
+              {
+                "name": "id",
+                "type": "uuid",
+                "id": true,
+                "required": true
+              },
+              {
+                "name": "patientId",
+                "type": "uuid",
+                "required": true,
+                "ui": {
+                  "label": "Patient ID",
+                  "widget": "text"
+                }
+              },
+              {
+                "name": "doctorId",
+                "type": "uuid",
+                "required": true,
+                "ui": {
+                  "label": "Doctor ID",
+                  "widget": "text"
+                }
+              },
+              {
+                "name": "status",
+                "type": "string",
+                "required": true,
+                "ui": {
+                  "label": "Status",
+                  "widget": "text"
+                }
+              }
+            ],
+            "invariants": [
+              {
+                "name": "AppointmentStatusAllowed",
+                "expr": "['scheduled', 'completed', 'cancelled'].includes(status)"
+              }
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "persistence",
+            "type": "PersistenceCapability",
+            "operations": [
+              "save"
+            ]
+          }
+        ],
+        "bindings": [],
+        "events": [
+          {
+            "name": "AppointmentScheduled",
+            "payload": [
+              {
+                "name": "id",
+                "type": "uuid"
+              }
+            ]
+          }
+        ],
+        "flows": [
+          {
+            "name": "ScheduleAppointment",
+            "concept": "Appointment",
+            "input": {
+              "patientId": {
+                "type": "uuid",
+                "required": true
+              },
+              "doctorId": {
+                "type": "uuid",
+                "required": true
+              },
+              "status": {
+                "type": "string",
+                "required": true
+              }
+            },
+            "steps": [
+              {
+                "name": "validate-input",
+                "type": "enforceInvariants",
+                "concept": "Appointment",
+                "invariants": [
+                  "AppointmentStatusAllowed"
+                ]
+              },
+              {
+                "name": "save-record",
+                "type": "capabilityCall",
+                "capability": "persistence",
+                "operation": "save",
+                "map": {
+                  "entity": "$input"
+                }
+              },
+              {
+                "name": "return-record",
+                "type": "return",
+                "map": {
+                  "appointment": "$saved"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "path": "manifest.json",
+      "content": {
+        "sampleId": "clinic-appointment-manager",
+        "sampleName": "Clinic Appointment Manager",
+        "category": "workflow",
+        "description": "Invalid sample-style manifest shape for this static artifact bundle contract.",
+        "primaryFlows": [
+          "ScheduleAppointment"
+        ],
+        "ownedConcepts": [
+          "Appointment"
+        ],
+        "verificationTargets": [
+          "runtime"
+        ]
+      }
+    },
+    {
+      "path": "expected-behavior.md",
+      "content": "# Expected Behavior\n\nThis fixture is expected to fail validation because its DSL shape is not the Safe Beta0 contract shape.\n"
+    },
+    {
+      "path": "expected-endpoints.md",
+      "content": "# Expected Endpoints\n\n- `GET /api/flows`\n- `POST /api/flows/ScheduleAppointment/execute`\n- `GET /api/audit`\n- `GET /api/correlations/{correlationId}`\n"
+    },
+    {
+      "path": "generation-notes.md",
+      "content": "# Generation Notes\n\nExpected-fail fixture for Web Checkpoint 004 schema shape validation.\n"
+    }
+  ],
+  "qualityGates": {
+    "validationMode": "lightweight-contract-validation",
+    "requiredArtifacts": [
+      "config.json",
+      "model.json",
+      "manifest.json",
+      "expected-behavior.md",
+      "expected-endpoints.md",
+      "generation-notes.md"
+    ],
+    "recommendedArtifacts": [
+      "input/example-request.json"
+    ],
+    "safeBeta0Restrictions": [
+      "No advanced type/reference/search/query/delete features in Safe Beta0."
+    ],
+    "missingInformation": [],
+    "riskNotes": [
+      "This file intentionally fails schema-shape validation."
+    ]
+  }
+}

@@ -16,7 +16,7 @@ const state = {
   }
 };
 
-const SITE_BUILD_LABEL = 'Safe Beta0 Proxy Limit Calibration 003B';
+const SITE_BUILD_LABEL = 'Safe Beta0 Schema Shape Validation 004';
 const CONTRACT_MODE = 'Safe Beta0';
 const PROMPT_CONTRACT_VERSION = 'NPDEV_PRECISE_FORMAT_GUIDE v4';
 const ARTIFACT_BUNDLE_SCHEMA_VERSION = 'npdev-static-generator-artifact-bundle.v4';
@@ -89,7 +89,7 @@ const NPDEV_RESPONSE_SCHEMA_HINT = {
     {
       path: 'config.json',
       content: {
-        $schema: 'contracts/config.schema.json',
+        $schema: '..\\\\..\\\\NPDevContract\\\\schemas\\\\config.schema.json',
         configVersion: '1.0',
         scenario: {
           name: 'kebab-case-scenario-id',
@@ -528,6 +528,35 @@ Use these safe fallbacks:
 If the user objective asks for advanced features, do not generate them in Safe Beta0.
 Use safe fallback fields and record the limitation in generation-notes.md and qualityGates.riskNotes.
 
+SAFE BETA0 SCHEMA SHAPE HARD RULES:
+Do not invent alternative NPDev DSL shapes. The browser rejects schema-shaped JSON that uses the wrong property names.
+Use exactly:
+- flow.input.concept
+- flow.input.mode
+- step.cap
+- step.op
+- step.args
+- step.out
+- return.value
+- enforceInvariants.scope
+- enforceInvariants.invariants
+- invariant.expr
+
+Do not use:
+- flow.concept
+- field-map input objects
+- step.capability
+- step.operation
+- step.map
+- invariant.expression
+- JavaScript expressions such as .includes(), array literals, or function calls
+
+Config path rules:
+- Use NPDevGenerator relative paths like "..\\Output", "..\\..\\NPDevRuntimeHost", "..\\Output\\ArtifactNP", and "..\\Output\\App".
+- Do not use website-local paths like "contracts/config.schema.json", "output/<scenario>", "bootstrap", "artifacts", or "final-exec".
+- Use scenario.name as kebab-case with no spaces.
+- Use runtime.springProfile "dev,step0,trial" unless the user explicitly asks for a different compatible profile.
+
 CRITICAL FORMAT RULES:
 1. Return JSON only. No markdown fence. No commentary outside JSON.
 2. The response must use schemaVersion "${ARTIFACT_BUNDLE_SCHEMA_VERSION}".
@@ -569,6 +598,8 @@ CRITICAL FORMAT RULES:
 21. expected-endpoints.md must list only conservative runtime endpoints: GET /api/flows, POST /api/flows/<FlowName>/execute, GET /api/audit, GET /api/correlations/{correlationId}.
 22. Keep the model small. Prefer 1 to 4 concepts and 1 to 3 flows.
 23. Use valid JSON only. JSON.parse must succeed.
+24. If persistence is used, model.bindings must include { "capability": "persistence", "adapter": "repository" }.
+25. If events or emitEvent steps are used, model.bindings must include { "capability": "eventBus", "adapter": "inproc" }.
 
 Minimal required artifact bundle shape:
 ${buildCompactArtifactShapeGuide()}
@@ -595,7 +626,10 @@ function formatSchemaContractForPrompt(includeFullSchemas = false) {
     `Validation mode in this browser: ${summary.validationMode}`,
     `Missing schemas: ${summary.missingSchemas.length ? summary.missingSchemas.join(', ') : 'none'}`,
     'Allowed Safe Beta0: field types string, uuid, integer, decimal, boolean, date; widgets text, textarea, checkbox, date, email; persistence operation save only; steps enforceInvariants, capabilityCall save, emitEvent with from, return; relationships use uuid ID fields, not reference; status uses string, not enum; endpoints use /api/flows, /api/flows/<FlowName>/execute, /api/audit, /api/correlations/{correlationId}.',
-    'Forbidden Safe Beta0: reference, enum, datetime, search-dialog, now(), assign, findById, findAll, delete, object-shaped emitEvent.payload, CRUD endpoints under /api/v1, /api/clinic, or /api/<concept>.'
+    'Forbidden Safe Beta0: reference, enum, datetime, search-dialog, now(), assign, findById, findAll, delete, object-shaped emitEvent.payload, CRUD endpoints under /api/v1, /api/clinic, or /api/<concept>.',
+    'Required NPDev DSL shape: flow.input.concept, flow.input.mode, step.cap, step.op, step.args, step.out, return.value, enforceInvariants.scope, enforceInvariants.invariants, invariant.expr.',
+    'Forbidden invented shape: flow.concept, field-map input objects, step.capability, step.operation, step.map, invariant.expression, JavaScript expressions such as .includes(), array literals, or function calls.',
+    'Required config style: NPDevGenerator relative paths such as ..\\Output, ..\\..\\NPDevRuntimeHost, ..\\Output\\ArtifactNP, and ..\\Output\\App; no website-local contracts/config.schema.json, output/<scenario>, bootstrap, artifacts, or final-exec paths.'
   ];
 
   if (includeFullSchemas) {
@@ -614,8 +648,8 @@ function buildCompactArtifactShapeGuide() {
   "schemaVersion": "${ARTIFACT_BUNDLE_SCHEMA_VERSION}",
   "project": { "name": "...", "scenarioId": "kebab-case", "objective": "...", "assumptions": [], "warnings": [] },
   "artifacts": [
-    { "path": "config.json", "content": { "$schema": "contracts/config.schema.json", "configVersion": "1.0", "scenario": {}, "generator": {}, "bootstrap": {}, "artifact": {}, "finalExec": {}, "database": {}, "runtime": {} } },
-    { "path": "model.json", "content": { "$schema": "contracts/model.schema.json", "namespace": "trial.example", "dslVersion": "1.0.0", "version": "1.0", "concepts": [{ "name": "Appointment", "fields": [{ "name": "patientId", "type": "uuid", "ui": { "label": "Patient ID", "widget": "text" } }] }], "capabilities": [{ "name": "persistence", "type": "PersistenceCapability", "operations": ["save"] }], "bindings": [], "events": [], "flows": [] } },
+    { "path": "config.json", "content": { "$schema": "..\\\\..\\\\NPDevContract\\\\schemas\\\\config.schema.json", "configVersion": "1.0", "scenario": { "name": "kebab-case", "outputRoot": "..\\\\Output" }, "generator": {}, "bootstrap": { "root": "..\\\\..\\\\NPDevRuntimeHost", "mergeStrategy": "clean-copy" }, "artifact": { "root": "..\\\\Output\\\\ArtifactNP", "generatedFolderName": "npdev-generated", "libsFolderName": "libs", "metaFolderName": "npdev-meta" }, "finalExec": { "root": "..\\\\Output\\\\App" }, "database": {}, "runtime": { "springProfile": "dev,step0,trial" } } },
+    { "path": "model.json", "content": { "$schema": "contracts/model.schema.json", "namespace": "trial.example", "dslVersion": "1.0.0", "version": "1.0", "concepts": [{ "name": "Appointment", "fields": [{ "name": "patientId", "type": "uuid", "ui": { "label": "Patient ID", "widget": "text" } }], "invariants": [{ "name": "AppointmentPatientRequired", "expr": "patientId != null && patientId != ''" }] }], "capabilities": [{ "name": "persistence", "type": "PersistenceCapability", "operations": ["save"] }], "bindings": [{ "capability": "persistence", "adapter": "repository" }, { "capability": "eventBus", "adapter": "inproc" }], "events": [], "flows": [{ "name": "ScheduleAppointment", "input": { "concept": "Appointment", "mode": "create" }, "steps": [{ "name": "validate-input", "type": "enforceInvariants", "scope": "Appointment", "invariants": ["AppointmentPatientRequired"] }, { "name": "save-record", "type": "capabilityCall", "cap": "persistence", "op": "save", "args": ["$input"], "out": "$saved" }, { "name": "return-record", "type": "return", "value": "$saved" }] }] } },
     { "path": "manifest.json", "content": { "id": "kebab-case", "title": "...", "complexity": "simple", "mainFlow": "...", "purpose": "...", "businessStory": "...", "features": [], "inputFiles": ["input/example-request.json"], "walkthrough": [], "expectedOutcomes": [] } },
     { "path": "expected-behavior.md", "content": "..." },
     { "path": "expected-endpoints.md", "content": "Only /api/flows, /api/flows/<FlowName>/execute, /api/audit, /api/correlations/{correlationId}." },
@@ -1035,17 +1069,18 @@ function validateArtifacts(bundle, artifacts) {
     for (const key of ['scenario', 'generator', 'bootstrap', 'artifact', 'finalExec', 'database', 'runtime']) {
       if (!config[key]) errors.push(`config.json missing required section: ${key}`);
     }
+    errors.push(...inspectConfigShape(config));
   }
 
   if (model && typeof model === 'object') {
     if (model.dslVersion !== '1.0.0') errors.push('model.json must include dslVersion "1.0.0".');
     if (!model.version) errors.push('model.json must include version.');
     if (!Array.isArray(model.concepts) || !model.concepts.length) errors.push('model.json must include at least one concept.');
+    errors.push(...inspectModelShape(model));
   }
 
   if (manifest && typeof manifest === 'object') {
-    if (!manifest.id) errors.push('manifest.json must include id.');
-    if (!manifest.mainFlow) warnings.push('manifest.json should include mainFlow.');
+    errors.push(...inspectManifestShape(manifest));
     if (Array.isArray(manifest.inputFiles)) {
       for (const inputFile of manifest.inputFiles) {
         const inputPath = String(inputFile || '').trim();
@@ -1157,6 +1192,190 @@ function inspectSafeBeta0Violations(model, artifacts, endpointsContent) {
   }
 
   return [...errors];
+}
+
+function inspectConfigShape(config) {
+  const errors = [];
+  const schemaPath = normalizeContractPath(config.$schema);
+  const scenarioName = String(config.scenario?.name || '');
+  const outputRoot = normalizeContractPath(config.scenario?.outputRoot);
+  const bootstrapRoot = normalizeContractPath(config.bootstrap?.root);
+  const artifactRoot = normalizeContractPath(config.artifact?.root);
+  const finalExecRoot = normalizeContractPath(config.finalExec?.root);
+  const springProfile = String(config.runtime?.springProfile || '').trim();
+  const apiKey = String(config.trialDefaults?.apiKey || '').trim();
+
+  if (schemaPath === 'contracts/config.schema.json') {
+    errors.push('config.json $schema must not use website-local path contracts/config.schema.json. Use an NPDevGenerator relative schema path.');
+  }
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(scenarioName)) {
+    errors.push('config.json scenario.name must be kebab-case with no spaces.');
+  }
+  if (!isNpdevRelativePath(outputRoot) || /^output(\/|$)/i.test(outputRoot)) {
+    errors.push('config.json scenario.outputRoot must use NPDev relative output style such as ..\\Output, not website-local output paths.');
+  }
+  if (bootstrapRoot === 'bootstrap') {
+    errors.push('config.json bootstrap.root must not be just bootstrap. Use an NPDev runtime root such as ..\\..\\NPDevRuntimeHost.');
+  }
+  if (artifactRoot === 'artifacts') {
+    errors.push('config.json artifact.root must not be just artifacts. Use an NPDev output path such as ..\\Output\\ArtifactNP.');
+  }
+  if (finalExecRoot === 'final-exec') {
+    errors.push('config.json finalExec.root must not be just final-exec. Use an NPDev output path such as ..\\Output\\App.');
+  }
+  if (apiKey === 'YOUR_API_KEY_HERE') {
+    errors.push('config.json trialDefaults.apiKey must not be YOUR_API_KEY_HERE. Use a local development placeholder such as dev-key, never a real secret.');
+  }
+  if (springProfile === 'default') {
+    errors.push('config.json runtime.springProfile must not be only default. Safe Beta0 expects dev,step0,trial unless explicitly justified.');
+  }
+
+  return errors;
+}
+
+function inspectModelShape(model) {
+  const errors = [];
+  const bindings = Array.isArray(model.bindings) ? model.bindings : [];
+  const flows = Array.isArray(model.flows) ? model.flows : [];
+  let usesPersistence = false;
+  let usesEvents = Array.isArray(model.events) && model.events.length > 0;
+
+  for (const concept of Array.isArray(model.concepts) ? model.concepts : []) {
+    for (const invariant of Array.isArray(concept.invariants) ? concept.invariants : []) {
+      const invariantName = `${concept.name || 'concept'}.${invariant.name || 'invariant'}`;
+      if (Object.prototype.hasOwnProperty.call(invariant, 'expression')) {
+        errors.push(`Safe Beta0 schema shape violation: ${invariantName} uses invariant.expression. Use invariant.expr.`);
+      }
+      if (invariant.type === 'expression') {
+        errors.push(`Safe Beta0 schema shape violation: ${invariantName} uses type expression. Use a simple invariant.expr string.`);
+      }
+      errors.push(...inspectInvariantExpression(invariant.expr, invariantName));
+    }
+  }
+
+  for (const capability of Array.isArray(model.capabilities) ? model.capabilities : []) {
+    if (capability.name === 'persistence' && Array.isArray(capability.operations) && capability.operations.includes('save')) {
+      usesPersistence = true;
+    }
+  }
+
+  for (const flow of flows) {
+    const flowName = flow.name || 'flow';
+    if (Object.prototype.hasOwnProperty.call(flow, 'concept')) {
+      errors.push(`Safe Beta0 schema shape violation: ${flowName} uses flow.concept. Use flow.input.concept.`);
+    }
+    if (!flow.input || typeof flow.input !== 'object' || Array.isArray(flow.input)) {
+      errors.push(`Safe Beta0 schema shape violation: ${flowName} must use input: { concept, mode }.`);
+    } else {
+      const inputKeys = Object.keys(flow.input);
+      const looksLikeFieldMap = inputKeys.some((key) => {
+        const value = flow.input[key];
+        return value && typeof value === 'object' && (Object.prototype.hasOwnProperty.call(value, 'type') || Object.prototype.hasOwnProperty.call(value, 'required'));
+      });
+      if (looksLikeFieldMap) {
+        errors.push(`Safe Beta0 schema shape violation: ${flowName} uses input as field definitions. Use input: { concept, mode }.`);
+      }
+      if (!flow.input.concept) errors.push(`Safe Beta0 schema shape violation: ${flowName} missing input.concept.`);
+      if (!flow.input.mode) errors.push(`Safe Beta0 schema shape violation: ${flowName} missing input.mode.`);
+    }
+
+    for (const step of Array.isArray(flow.steps) ? flow.steps : []) {
+      const stepName = `${flowName}.${step.name || step.type || 'step'}`;
+      if (step.type === 'capabilityCall') {
+        usesPersistence = usesPersistence || step.cap === 'persistence' || step.capability === 'persistence';
+        if (Object.prototype.hasOwnProperty.call(step, 'capability')) {
+          errors.push(`Safe Beta0 schema shape violation: ${stepName} uses step.capability. Use step.cap.`);
+        }
+        if (Object.prototype.hasOwnProperty.call(step, 'operation')) {
+          errors.push(`Safe Beta0 schema shape violation: ${stepName} uses step.operation. Use step.op.`);
+        }
+        if (Object.prototype.hasOwnProperty.call(step, 'map')) {
+          errors.push(`Safe Beta0 schema shape violation: ${stepName} uses step.map. Use step.args and step.out.`);
+        }
+        if (!step.cap) errors.push(`Safe Beta0 schema shape violation: ${stepName} missing step.cap.`);
+        if (!step.op) errors.push(`Safe Beta0 schema shape violation: ${stepName} missing step.op.`);
+        if (!Array.isArray(step.args)) errors.push(`Safe Beta0 schema shape violation: ${stepName} must include args array.`);
+        if (!step.out) errors.push(`Safe Beta0 schema shape violation: ${stepName} must include out.`);
+      }
+      if (step.type === 'enforceInvariants') {
+        if (Object.prototype.hasOwnProperty.call(step, 'concept')) {
+          errors.push(`Safe Beta0 schema shape violation: ${stepName} uses step.concept. Use step.scope.`);
+        }
+        if (!step.scope) errors.push(`Safe Beta0 schema shape violation: ${stepName} missing scope.`);
+        if (!Array.isArray(step.invariants)) errors.push(`Safe Beta0 schema shape violation: ${stepName} must include invariants array.`);
+      }
+      if (step.type === 'return') {
+        if (Object.prototype.hasOwnProperty.call(step, 'map')) {
+          errors.push(`Safe Beta0 schema shape violation: ${stepName} uses step.map. Use return.value.`);
+        }
+        if (!Object.prototype.hasOwnProperty.call(step, 'value')) {
+          errors.push(`Safe Beta0 schema shape violation: ${stepName} missing return.value.`);
+        }
+      }
+      if (step.type === 'emitEvent') usesEvents = true;
+    }
+  }
+
+  if (usesPersistence && !bindings.length) {
+    errors.push('Safe Beta0 schema shape violation: model.bindings must not be empty when persistence is used.');
+  }
+  if (usesPersistence && !bindings.some((binding) => binding.capability === 'persistence' && binding.adapter === 'repository')) {
+    errors.push('Safe Beta0 schema shape violation: model.bindings must include persistence -> repository when persistence is used.');
+  }
+  if (usesEvents && !bindings.some((binding) => binding.capability === 'eventBus' && binding.adapter === 'inproc')) {
+    errors.push('Safe Beta0 schema shape violation: model.bindings must include eventBus -> inproc when events or emitEvent steps are used.');
+  }
+
+  return errors;
+}
+
+function inspectInvariantExpression(expr, invariantName) {
+  if (typeof expr !== 'string') return [];
+  const errors = [];
+  if (/\.includes\s*\(/i.test(expr)) {
+    errors.push(`Safe Beta0 schema shape violation: ${invariantName} uses .includes(). Use simple comparisons in invariant.expr.`);
+  }
+  if (/\[[^\]]*\]/.test(expr)) {
+    errors.push(`Safe Beta0 schema shape violation: ${invariantName} uses an array literal. Use simple comparisons in invariant.expr.`);
+  }
+  if (/\b[A-Za-z_]\w*\s*\(/.test(expr)) {
+    errors.push(`Safe Beta0 schema shape violation: ${invariantName} uses a function call. Use simple comparisons in invariant.expr.`);
+  }
+  if (/(^|[^=!])={3}|!==|=>|;|\b(const|let|var|return)\b/.test(expr)) {
+    errors.push(`Safe Beta0 schema shape violation: ${invariantName} uses JavaScript syntax. Use simple NPDev expression strings.`);
+  }
+  return errors;
+}
+
+function inspectManifestShape(manifest) {
+  const errors = [];
+  const required = ['id', 'title', 'complexity', 'mainFlow', 'purpose', 'businessStory', 'features', 'inputFiles', 'walkthrough', 'expectedOutcomes'];
+  const alternativeKeys = ['sampleId', 'sampleName', 'primaryFlows', 'ownedConcepts', 'verificationTargets'];
+
+  for (const key of required) {
+    if (!Object.prototype.hasOwnProperty.call(manifest, key)) {
+      errors.push(`manifest.json must include ${key}.`);
+    }
+  }
+  for (const key of ['features', 'inputFiles', 'walkthrough', 'expectedOutcomes']) {
+    if (Object.prototype.hasOwnProperty.call(manifest, key) && !Array.isArray(manifest[key])) {
+      errors.push(`manifest.json ${key} must be an array.`);
+    }
+  }
+  const presentAlternatives = alternativeKeys.filter((key) => Object.prototype.hasOwnProperty.call(manifest, key));
+  if (presentAlternatives.length) {
+    errors.push(`Safe Beta0 schema shape violation: manifest.json uses sample-manifest keys ${presentAlternatives.join(', ')}. Use id, title, complexity, mainFlow, purpose, businessStory, features, inputFiles, walkthrough, expectedOutcomes.`);
+  }
+
+  return errors;
+}
+
+function normalizeContractPath(value) {
+  return String(value || '').trim().replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, '');
+}
+
+function isNpdevRelativePath(value) {
+  return /^\.\.(\/|$)/.test(normalizeContractPath(value));
 }
 
 function humanizeFieldLabel(value) {
@@ -1284,7 +1503,7 @@ function buildMockBundle(input) {
       {
         path: 'config.json',
         content: {
-          $schema: 'contracts/config.schema.json',
+          $schema: '..\\..\\NPDevContract\\schemas\\config.schema.json',
           configVersion: '1.0',
           scenario: {
             name: scenarioId,
@@ -1600,6 +1819,9 @@ Rules:
 - Remove findById/findAll/delete.
 - Replace CRUD endpoints with /api/flows endpoints.
 - Ensure every manifest inputFiles entry exists in artifacts[].
+- Use NPDevGenerator config paths such as ..\\Output, ..\\..\\NPDevRuntimeHost, ..\\Output\\ArtifactNP, and ..\\Output\\App.
+- Use flow.input.concept, flow.input.mode, step.cap, step.op, step.args, step.out, enforceInvariants.scope, invariant.expr, and return.value.
+- Do not use flow.concept, field-map input objects, step.capability, step.operation, step.map, invariant.expression, JavaScript expressions, or empty bindings when persistence is used.
 
 Original artifact bundle:
 ${raw}

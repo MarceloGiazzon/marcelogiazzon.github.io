@@ -3,6 +3,7 @@
 Web Checkpoint 001 added a static schema contract pack for the NPDev artifact generator. Web Checkpoint 002 keeps that pack and adds Safe Beta0 contract enforcement on top of it.
 Web Checkpoint 003 keeps the browser schema pack loaded for metadata and validation, but normal Gemini prompts use compact schema summaries instead of injecting full schema text.
 Web Checkpoint 003B raises the Worker request-body hard limit to 128 KB while keeping compact prompt mode as the default.
+Web Checkpoint 004 adds lightweight NPDev schema shape checks for config paths, flow property names, invariant expressions, bindings, and manifest handoff shape.
 
 ## Detected Paths
 
@@ -51,8 +52,10 @@ The manifest records SHA-256 hashes for copied and generated schemas, the select
 
 The site loads the contract pack from relative paths, displays load status, git head, copied schema names, hashes, and missing schemas. The Gemini prompt includes schema metadata plus compact schema excerpts and instructs Gemini that `config.json`, `model.json`, `manifest.json`, and the outer artifact bundle must match the loaded contracts.
 
-Validation remains lightweight for this checkpoint. It checks required outer fields, required artifacts, core config/model/manifest sections, path safety, JSON-object content for JSON artifacts, schema-pack metadata, manifest `inputFiles` consistency, and Safe Beta0 hard-fail rules.
+Validation remains lightweight for this checkpoint. It checks required outer fields, required artifacts, core config/model/manifest sections, path safety, JSON-object content for JSON artifacts, schema-pack metadata, manifest `inputFiles` consistency, Safe Beta0 hard-fail rules, and schema-shape rules that catch invalid NPDevGenerator config paths and invented DSL property names.
 
 Safe Beta0 violations are errors, not warnings. They include `reference`, `enum`, `datetime`, `search-dialog`, `now()`, `assign`, `findById`, `findAll`, `delete`, object-shaped `emitEvent.payload`, and expected active CRUD endpoints under `/api/v1`.
 
 The active outer bundle schema is now `npdev-static-generator-artifact-bundle.v4`. Responses using the older `npdev-static-generator-artifact-bundle.v2` schema are invalid and show a stale-contract error mentioning browser cache, stale deployed `app.js`, or Gemini ignoring the contract.
+
+Checkpoint 004 also rejects artifacts that look conservative but use the wrong shape, such as `flow.concept`, field-map `flow.input`, `step.capability`, `step.operation`, `step.map`, `invariant.expression`, JavaScript-like invariant expressions, empty persistence bindings, website-local config paths, or sample-style manifest keys such as `sampleId` and `primaryFlows`.
