@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NPDev Artifact Generator</title>
+  <meta name="description" content="Static GitHub Pages app that generates NPDevGenerator-ready config.json, model.json, manifest.json and evidence files through a Cloudflare Worker AI proxy." />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-grid">
+      <div>
+        <p class="eyebrow">NPDev practical generation flow</p>
+        <h1>Generate NPDevGenerator-ready artifacts</h1>
+        <p class="lead">
+          Describe the project objective, call the Cloudflare Worker proxy, review the generated NPDev input files,
+          and download a ZIP ready to copy into a sample <code>Input</code> folder.
+        </p>
+      </div>
+      <div class="status-card" aria-live="polite">
+        <span class="status-dot" id="statusDot"></span>
+        <div>
+          <strong id="statusTitle">Ready</strong>
+          <p id="statusMessage">Use Mock first, then connect your Cloudflare Worker URL.</p>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="container app-layout">
+    <section class="panel">
+      <div class="panel-header">
+        <h2>1. Project objective</h2>
+        <button type="button" class="ghost-button" id="loadExampleButton">Load example</button>
+      </div>
+
+      <div class="field-grid two">
+        <label>
+          Project name
+          <input id="projectName" type="text" placeholder="e.g. Clinic Appointment Manager" autocomplete="off" />
+        </label>
+        <label>
+          Scenario id
+          <input id="scenarioId" type="text" placeholder="clinic-appointment-manager" autocomplete="off" />
+        </label>
+      </div>
+
+      <label>
+        Objective
+        <textarea id="objective" rows="8" placeholder="Describe the system NPDev should generate. Include entities, flows, roles, constraints, runtime expectations, and expected behavior."></textarea>
+      </label>
+
+      <details class="details-box" open>
+        <summary>NPDevGenerator options</summary>
+        <div class="field-grid two">
+          <label>
+            Primary concepts/entities, comma separated
+            <input id="entities" type="text" placeholder="Patient, Doctor, Appointment" />
+          </label>
+          <label>
+            Main flow name
+            <input id="mainFlow" type="text" placeholder="ScheduleAppointment" />
+          </label>
+          <label>
+            Backend target
+            <select id="backendTarget">
+              <option value="spring-boot-runtimehost">Spring Boot RuntimeHost</option>
+              <option value="generic-rest">Generic REST</option>
+            </select>
+          </label>
+          <label>
+            Database provider
+            <select id="databaseProvider">
+              <option value="docker-postgres">docker-postgres</option>
+              <option value="postgres">postgres</option>
+            </select>
+          </label>
+          <label>
+            Runtime port
+            <input id="serverPort" type="number" min="1024" max="65535" value="8083" />
+          </label>
+          <label>
+            Complexity
+            <select id="complexity">
+              <option value="simple">simple</option>
+              <option value="medium">medium</option>
+              <option value="tenant">tenant</option>
+            </select>
+          </label>
+        </div>
+        <label>
+          Extra constraints
+          <textarea id="constraints" rows="4" placeholder="Example: Beta0 Path B only; no trusted-source execution; avoid unsupported custom procedure code; generate conservative concepts and flows."></textarea>
+        </label>
+      </details>
+    </section>
+
+    <section class="panel">
+      <h2>2. AI provider</h2>
+      <div class="security-note">
+        <strong>Security:</strong> GitHub Pages must not contain API keys. Use the Cloudflare Worker proxy for Gemini.
+        The Worker stores <code>GEMINI_API_KEY</code> as a secret.
+      </div>
+
+      <div class="field-grid two">
+        <label>
+          Provider
+          <select id="provider">
+            <option value="mock">Mock provider - no network</option>
+            <option value="cloudflare">Cloudflare Worker proxy - Gemini</option>
+          </select>
+        </label>
+        <label>
+          Gemini model
+          <input id="model" type="text" value="gemini-2.5-flash" autocomplete="off" />
+        </label>
+      </div>
+
+      <label id="endpointRow">
+        Cloudflare Worker endpoint
+        <input id="endpoint" type="url" placeholder="https://npdev-ai-proxy.YOUR_ACCOUNT.workers.dev/v1/generate" autocomplete="off" />
+      </label>
+
+      <div class="field-grid two compact">
+        <label>
+          Temperature
+          <input id="temperature" type="number" min="0" max="1" step="0.1" value="0.1" />
+        </label>
+        <label>
+          Max output tokens
+          <input id="maxTokens" type="number" min="1024" max="16000" step="256" value="8000" />
+        </label>
+      </div>
+
+      <div class="checkbox-row">
+        <input id="storeEndpoint" type="checkbox" />
+        <label for="storeEndpoint">Remember Worker endpoint in this browser.</label>
+      </div>
+
+      <div class="button-row">
+        <button type="button" class="primary-button" id="generateButton">Generate artifacts</button>
+        <button type="button" class="secondary-button" id="previewPromptButton">Preview prompt</button>
+        <button type="button" class="ghost-button" id="clearButton">Clear output</button>
+      </div>
+    </section>
+
+    <section class="panel wide">
+      <div class="panel-header">
+        <h2>3. Prompt and raw response</h2>
+        <div class="button-row right">
+          <button type="button" class="ghost-button" id="copyPromptButton">Copy prompt</button>
+          <button type="button" class="ghost-button" id="copyRawButton">Copy raw response</button>
+        </div>
+      </div>
+      <div class="split-output">
+        <label>
+          Prompt sent to Worker/Gemini
+          <textarea id="promptOutput" rows="14" readonly></textarea>
+        </label>
+        <label>
+          Raw AI response
+          <textarea id="rawOutput" rows="14" readonly></textarea>
+        </label>
+      </div>
+    </section>
+
+    <section class="panel wide">
+      <div class="panel-header">
+        <h2>4. Generated artifacts</h2>
+        <div class="button-row right">
+          <button type="button" class="secondary-button" id="downloadBundleButton" disabled>Download bundle JSON</button>
+          <button type="button" class="primary-button" id="downloadZipButton" disabled>Download artifacts ZIP</button>
+        </div>
+      </div>
+      <div id="validationBox" class="validation-box">No artifact generated yet.</div>
+      <div id="artifactList" class="artifact-list"></div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <strong>NPDev Beta0 practical flow:</strong>
+      generate conservative NPDevGenerator inputs, review them, then run NPDev validation/generation locally.
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
