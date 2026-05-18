@@ -2,6 +2,7 @@
 
 Web Checkpoint 001 added a static schema contract pack for the NPDev artifact generator. Web Checkpoint 002 keeps that pack and adds Safe Beta0 contract enforcement on top of it.
 Web Checkpoint 003 keeps the browser schema pack loaded for metadata and validation, but normal Gemini prompts use compact schema summaries instead of injecting full schema text.
+Web Checkpoint 003B raises the Worker request-body hard limit to 128 KB while keeping compact prompt mode as the default.
 
 ## Detected Paths
 

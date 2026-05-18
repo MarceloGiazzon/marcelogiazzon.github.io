@@ -16,13 +16,17 @@ const state = {
   }
 };
 
-const SITE_BUILD_LABEL = 'Safe Beta0 Prompt Size Control 003';
+const SITE_BUILD_LABEL = 'Safe Beta0 Proxy Limit Calibration 003B';
 const CONTRACT_MODE = 'Safe Beta0';
 const PROMPT_CONTRACT_VERSION = 'NPDEV_PRECISE_FORMAT_GUIDE v4';
 const ARTIFACT_BUNDLE_SCHEMA_VERSION = 'npdev-static-generator-artifact-bundle.v4';
 const VALIDATION_MODE = 'lightweight-contract-validation';
-const PROXY_PROMPT_LIMIT_BYTES = 30000;
-const PROXY_REQUEST_WARN_BYTES = 24000;
+const WORKER_REQUEST_NOTICE_BYTES = 64 * 1024;
+const WORKER_REQUEST_SOFT_LIMIT_BYTES = 96 * 1024;
+const WORKER_REQUEST_HARD_LIMIT_BYTES = 128 * 1024;
+const DEFAULT_MAX_OUTPUT_TOKENS = 12000;
+const RECOMMENDED_MAX_OUTPUT_TOKENS = 24000;
+const HARD_MAX_OUTPUT_TOKENS = 32000;
 
 const SCHEMA_PACK_PATHS = {
   manifest: 'contracts/npdev-contract-manifest.json',
@@ -447,7 +451,7 @@ function getFormValues() {
     model: $('model').value.trim() || 'gemini-2.5-flash',
     endpoint: $('endpoint').value.trim(),
     temperature: Number($('temperature').value || 0.1),
-    maxTokens: Number($('maxTokens').value || 12000),
+    maxTokens: Number($('maxTokens').value || DEFAULT_MAX_OUTPUT_TOKENS),
     includeFullSchemas: Boolean($('includeFullSchemas')?.checked)
   };
 }
@@ -680,6 +684,12 @@ function buildWorkerRequestPayload(input, prompt) {
   };
 }
 
+function effectiveMaxOutputTokens(requestedMaxOutputTokens) {
+  const requested = Number(requestedMaxOutputTokens);
+  if (!Number.isFinite(requested)) return DEFAULT_MAX_OUTPUT_TOKENS;
+  return Math.min(Math.max(requested, 1024), HARD_MAX_OUTPUT_TOKENS);
+}
+
 function buildCompactSchemaHint() {
   const summary = schemaPackSummary();
   return {
@@ -716,31 +726,56 @@ function utf8ByteLength(value) {
 
 function calculateRequestDiagnostics(input, prompt, requestPayload = buildWorkerRequestPayload(input, prompt)) {
   const requestJson = JSON.stringify(requestPayload);
+  const promptBytes = utf8ByteLength(prompt);
+  const requestJsonBytes = utf8ByteLength(requestJson);
+  const requestedMaxOutputTokens = Number(input.maxTokens || DEFAULT_MAX_OUTPUT_TOKENS);
+  const knownEffectiveMaxOutputTokens = effectiveMaxOutputTokens(requestedMaxOutputTokens);
+  const compactModeEnabled = !input.includeFullSchemas;
+  let requestSizeLevel = 'ok';
+  if (requestJsonBytes >= WORKER_REQUEST_NOTICE_BYTES) requestSizeLevel = 'notice';
+  if (requestJsonBytes >= WORKER_REQUEST_SOFT_LIMIT_BYTES) requestSizeLevel = 'warning';
+  if (requestJsonBytes > WORKER_REQUEST_HARD_LIMIT_BYTES) requestSizeLevel = 'blocked';
+
   return {
     promptChars: prompt.length,
-    promptBytes: utf8ByteLength(prompt),
-    requestBytes: utf8ByteLength(requestJson),
+    promptBytes,
+    requestJsonBytes,
+    requestBytes: requestJsonBytes,
     model: input.model,
-    maxOutputTokens: input.maxTokens,
+    requestedMaxOutputTokens,
+    effectiveMaxOutputTokens: knownEffectiveMaxOutputTokens,
+    maxOutputWasClamped: knownEffectiveMaxOutputTokens !== requestedMaxOutputTokens,
+    maxOutputTokens: requestedMaxOutputTokens,
     includeFullSchemas: Boolean(input.includeFullSchemas),
-    limitBytes: PROXY_PROMPT_LIMIT_BYTES,
-    nearLimit: utf8ByteLength(requestJson) >= PROXY_REQUEST_WARN_BYTES || utf8ByteLength(prompt) >= PROXY_REQUEST_WARN_BYTES
+    compactModeEnabled,
+    workerNoticeBytes: WORKER_REQUEST_NOTICE_BYTES,
+    workerSoftLimitBytes: WORKER_REQUEST_SOFT_LIMIT_BYTES,
+    workerHardLimitBytes: WORKER_REQUEST_HARD_LIMIT_BYTES,
+    requestSizeLevel,
+    nearLimit: requestSizeLevel === 'warning' || requestSizeLevel === 'blocked',
+    shouldBlock: requestSizeLevel === 'blocked',
+    tokenWarning: requestedMaxOutputTokens > RECOMMENDED_MAX_OUTPUT_TOKENS
   };
 }
 
 function renderPromptDiagnostics(diagnostics) {
   const box = $('promptDiagnostics');
   if (!box) return;
-  box.className = diagnostics.nearLimit ? 'prompt-diagnostics warning' : 'prompt-diagnostics';
+  box.className = `prompt-diagnostics ${diagnostics.requestSizeLevel === 'ok' ? '' : diagnostics.requestSizeLevel}`.trim();
   box.innerHTML = `
     <strong>Prompt size:</strong>
     ${diagnostics.promptChars.toLocaleString()} chars,
     ${diagnostics.promptBytes.toLocaleString()} prompt bytes,
-    ${diagnostics.requestBytes.toLocaleString()} request JSON bytes.
+    ${diagnostics.requestJsonBytes.toLocaleString()} request JSON bytes.
     <strong>Model:</strong> ${escapeHtml(diagnostics.model)}.
-    <strong>Max output:</strong> ${Number(diagnostics.maxOutputTokens).toLocaleString()} tokens.
+    <strong>Max output:</strong> requested ${Number(diagnostics.requestedMaxOutputTokens).toLocaleString()} tokens, effective ${Number(diagnostics.effectiveMaxOutputTokens).toLocaleString()} tokens.
     ${diagnostics.includeFullSchemas ? '<span>Full schema prompt mode may exceed proxy limits.</span>' : '<span>Compact schema prompt mode active.</span>'}
-    ${diagnostics.nearLimit ? '<span>Request is close to the proxy limit. Reduce prompt detail or keep compact mode enabled.</span>' : ''}
+    <span>Worker limits: notice ${diagnostics.workerNoticeBytes.toLocaleString()} bytes, warning ${diagnostics.workerSoftLimitBytes.toLocaleString()} bytes, hard ${diagnostics.workerHardLimitBytes.toLocaleString()} bytes.</span>
+    ${diagnostics.requestSizeLevel === 'notice' ? '<span>Request size is moderate but below the Worker warning threshold.</span>' : ''}
+    ${diagnostics.requestSizeLevel === 'warning' ? '<span>Request is close to the proxy hard limit. Reduce prompt detail or keep compact mode enabled.</span>' : ''}
+    ${diagnostics.requestSizeLevel === 'blocked' ? '<span>Request exceeds the Worker hard limit and will not be sent.</span>' : ''}
+    ${diagnostics.tokenWarning ? `<span>Requested max output tokens exceed the recommended ${RECOMMENDED_MAX_OUTPUT_TOKENS.toLocaleString()} token limit. The Worker hard cap is ${HARD_MAX_OUTPUT_TOKENS.toLocaleString()}.</span>` : ''}
+    ${diagnostics.maxOutputWasClamped ? '<span>The Worker will clamp max output tokens before calling Gemini.</span>' : ''}
   `;
 }
 
@@ -775,6 +810,20 @@ function buildProviderError(response, data) {
   error.rawPayload = rawPayload;
   error.isProviderError = true;
   error.providerStatus = status;
+  return error;
+}
+
+function buildPromptTooLargeError(diagnostics) {
+  const rawPayload = JSON.stringify({
+    error: 'prompt_too_large',
+    message: 'Prompt exceeds this proxy limit.',
+    requestBytes: diagnostics.requestJsonBytes,
+    limitBytes: diagnostics.workerHardLimitBytes,
+    suggestion: 'Use compact prompt mode, reduce schema context, or lower prompt detail.'
+  }, null, 2);
+  const error = new Error('Prompt is too large for the proxy. The site should use compact schema guidance instead of full schemas. Reduce prompt detail or switch to compact mode.');
+  error.rawPayload = rawPayload;
+  error.isProviderError = true;
   return error;
 }
 
@@ -1633,6 +1682,9 @@ async function handleGenerate() {
   try {
     console.info('[NPDev] generation contract', siteContractSummary());
     console.info('[NPDev] prompt request diagnostics', diagnostics);
+    if (input.provider === 'cloudflare' && diagnostics.shouldBlock) {
+      throw buildPromptTooLargeError(diagnostics);
+    }
     setStatus('busy', 'Generating', input.provider === 'mock' ? 'Generating mock artifacts.' : 'Calling Cloudflare Worker proxy.');
     const raw = await callProvider(input, prompt);
     state.lastRaw = raw;

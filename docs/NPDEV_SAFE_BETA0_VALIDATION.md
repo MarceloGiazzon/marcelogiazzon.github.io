@@ -10,15 +10,17 @@ Local NPDev schema validation and generator validation remain the final authorit
 
 ## Active Contract
 
-- Site build: `Safe Beta0 Prompt Size Control 003`
+- Site build: `Safe Beta0 Proxy Limit Calibration 003B`
 - Site contract mode: `Safe Beta0`
 - Prompt contract: `NPDEV_PRECISE_FORMAT_GUIDE v4`
 - Bundle schema: `npdev-static-generator-artifact-bundle.v4`
 - Validation mode: `lightweight-contract-validation`
 
-Use `?v=safe-beta0-003` or a hard browser refresh when testing deployed Pages output to avoid stale cached JavaScript.
+Use `?v=safe-beta0-003b` or a hard browser refresh when testing deployed Pages output to avoid stale cached JavaScript.
 
 Checkpoint 003 uses compact schema guidance by default. The browser still loads schema metadata from `contracts/`, but normal Gemini requests include only schema names, hashes, Safe Beta0 rules, and a minimal artifact shape. The debug-only full schema prompt mode is off by default because it can exceed proxy limits.
+
+Checkpoint 003B calibrates the proxy limit separately from Gemini context size. Browser diagnostics classify request JSON size as OK under 64 KB, notice from 64-96 KB, warning from 96-128 KB, and blocked above the Worker hard limit of 128 KB. The Worker clamps requested output tokens to 32,000 and reports clamp diagnostics.
 
 ## Allowed Safe Beta0 Features
 
@@ -65,7 +67,7 @@ Every path listed in `manifest.json` `inputFiles` must also exist in `artifacts[
 
 1. Serve the static site from the detected static site root.
 2. Open `http://localhost:8088`.
-3. Confirm the visible build label says `Safe Beta0 Prompt Size Control 003`.
+3. Confirm the visible build label says `Safe Beta0 Proxy Limit Calibration 003B`.
 4. Use Mock provider and generate artifacts.
 5. Confirm the validation box says `Safe Beta0 validation: PASSED`.
 6. Preview the prompt and confirm it says `npdev-static-generator-artifact-bundle.v4`, `SAFE BETA0 HARD RULES`, forbidden advanced features, and safe fallbacks.

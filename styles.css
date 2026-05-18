@@ -210,10 +210,23 @@ input:focus, select:focus, textarea:focus {
   line-height: 1.45;
 }
 
-.prompt-diagnostics.warning {
+.prompt-diagnostics.notice {
+  border-color: rgba(98, 166, 255, 0.45);
+  color: #dbeafe;
+  background: rgba(98, 166, 255, 0.08);
+}
+
+.prompt-diagnostics.warning,
+.prompt-diagnostics.blocked {
   border-color: rgba(242, 204, 96, 0.55);
   color: #f9e6a5;
   background: rgba(242, 204, 96, 0.08);
+}
+
+.prompt-diagnostics.blocked {
+  border-color: rgba(255, 123, 114, 0.65);
+  color: #ffd6d3;
+  background: rgba(255, 123, 114, 0.08);
 }
 
 .prompt-diagnostics span {
