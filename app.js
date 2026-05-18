@@ -640,7 +640,7 @@ async function callCloudflareWorker(input, prompt) {
   const data = await safeReadJson(response);
 
   if (!response.ok) {
-    throw new Error(formatApiError('Cloudflare Worker request failed', data));
+    throw buildProviderError(response, data);
   }
 
   if (typeof data.text === 'string' && data.text.trim()) return data.text;
@@ -660,6 +660,21 @@ async function safeReadJson(response) {
 function formatApiError(prefix, data) {
   const message = data?.error?.message || data?.message || data?.raw || JSON.stringify(data);
   return `${prefix}: ${message}`;
+}
+
+function buildProviderError(response, data) {
+  const status = data?.status || data?.upstreamStatus || response.status;
+  const rawPayload = JSON.stringify(data, null, 2);
+  const upstreamUnavailable = data?.error === 'upstream_error'
+    && (Number(status) === 503 || /UNAVAILABLE|overload|high[- ]?demand/i.test(rawPayload));
+  const message = upstreamUnavailable
+    ? 'Gemini is temporarily unavailable or overloaded. Try again later, reduce max output tokens, or switch model.'
+    : formatApiError('Cloudflare Worker request failed', data);
+  const error = new Error(message);
+  error.rawPayload = rawPayload;
+  error.isProviderError = true;
+  error.providerStatus = status;
+  return error;
 }
 
 function parseArtifactBundle(rawText) {
@@ -826,7 +841,10 @@ function validateArtifacts(bundle, artifacts) {
   }
 
   if (bundle.schemaVersion !== ARTIFACT_BUNDLE_SCHEMA_VERSION) {
-    errors.push(`Invalid artifact bundle schemaVersion. Expected ${ARTIFACT_BUNDLE_SCHEMA_VERSION}. This usually means the site prompt is stale, browser cache is stale, or Gemini ignored the contract.`);
+    errors.push(`Invalid artifact bundle schemaVersion. Expected ${ARTIFACT_BUNDLE_SCHEMA_VERSION}. This usually means the browser is cached, the deployed app.js is stale, or Gemini ignored the contract.`);
+    if (bundle.schemaVersion) {
+      errors.push(`Invalid artifact bundle schemaVersion: ${String(bundle.schemaVersion).replace(/^npdev-static-generator-artifact-bundle\./, '')}.`);
+    }
   }
 
   if (!bundle.project || typeof bundle.project !== 'object') errors.push('Outer response missing required top-level field: project.');
@@ -949,6 +967,9 @@ function inspectSafeBeta0Violations(model, artifacts, endpointsContent) {
         }
         if (['assign', 'findById', 'findAll', 'delete'].includes(step.type)) {
           errors.add(`Safe Beta0 violation: ${stepName} uses ${step.type}. Safe Beta0 does not support that flow step.`);
+          if (step.type === 'assign') {
+            errors.add(`Safe Beta0 violation: ${flow.name || 'flow'} uses assign. Safe Beta0 does not support that flow step.`);
+          }
         }
         if (['findById', 'findAll', 'delete'].includes(step.op)) {
           errors.add(`Safe Beta0 violation: ${stepName} uses op ${step.op}. Safe Beta0 allows capabilityCall op save only.`);
@@ -968,6 +989,21 @@ function inspectSafeBeta0Violations(model, artifacts, endpointsContent) {
     : artifactContentToString(endpointsContent, 'expected-endpoints.md');
   if (/(^|\s)(GET|POST|PUT|PATCH|DELETE)\s+\/api\/v1\b|\/api\/v1\b/i.test(endpointText)) {
     errors.add('Safe Beta0 violation: expected-endpoints.md contains /api/v1 CRUD endpoints. Use flow endpoints only.');
+  }
+  if (/\/api\/clinic\b/i.test(endpointText)) {
+    errors.add('Safe Beta0 violation: expected-endpoints.md contains CRUD endpoints under /api/clinic. Use flow endpoints only.');
+  }
+  if (/\bDELETE\s+\//i.test(endpointText)) {
+    errors.add('Safe Beta0 violation: expected-endpoints.md contains DELETE endpoints. Safe Beta0 expected endpoints must not include deletes.');
+  }
+  if (/\bPUT\s+\/api\//i.test(endpointText)) {
+    errors.add('Safe Beta0 violation: expected-endpoints.md contains PUT /api/ endpoints. Use flow endpoints only.');
+  }
+  if (/\bGET\s+\/api\/(?!flows\b|audit\b|correlations\b)[^\s`]*\{id\}/i.test(endpointText)) {
+    errors.add('Safe Beta0 violation: expected-endpoints.md contains GET /api/.../{id} concept CRUD endpoints. Use flow endpoints only.');
+  }
+  if (/\bPOST\s+\/api\/(?!flows\/[^/\s`]+\/execute\b)[^\s`]+/i.test(endpointText)) {
+    errors.add('Safe Beta0 violation: expected-endpoints.md contains POST /api/... concept CRUD endpoints. Use /api/flows/<FlowName>/execute only.');
   }
 
   return [...errors];
@@ -1478,9 +1514,15 @@ async function handleGenerate() {
 
   const prompt = buildNpdevPrompt(input);
   state.lastPrompt = prompt;
+  state.lastBundle = null;
+  state.lastFiles = [];
+  state.lastValidation = null;
   $('promptOutput').value = prompt;
   $('rawOutput').value = '';
-  state.lastValidation = null;
+  $('artifactList').innerHTML = '';
+  $('validationBox').className = 'validation-box';
+  $('validationBox').textContent = 'No artifact generated yet.';
+  setDownloadButtons({ bundle: false, zip: false });
   setRepairPromptButton(false);
 
   try {
@@ -1507,7 +1549,10 @@ async function handleGenerate() {
   } catch (error) {
     console.error('[NPDev] Generation or parse failed', error);
     setStatus('error', 'Generation failed', error.message);
-    if (!$('rawOutput').value) {
+    if (error.rawPayload) {
+      state.lastRaw = error.rawPayload;
+      $('rawOutput').value = error.rawPayload;
+    } else if (!$('rawOutput').value) {
       $('rawOutput').value = error.stack || error.message;
     }
   }

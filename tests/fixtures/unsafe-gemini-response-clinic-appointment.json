@@ -89,7 +89,19 @@
                 }
               },
               {
-                "name": "appointmentTime",
+                "name": "doctorId",
+                "type": "reference",
+                "reference": {
+                  "target": "Doctor",
+                  "displayField": "name"
+                },
+                "ui": {
+                  "label": "Doctor",
+                  "widget": "search-dialog"
+                }
+              },
+              {
+                "name": "appointmentDateTime",
                 "type": "datetime",
                 "required": true
               },
@@ -101,8 +113,8 @@
             ],
             "invariants": [
               {
-                "name": "FutureAppointment",
-                "expr": "appointmentTime >= now()"
+                "name": "AppointmentDateTimeFuture",
+                "expr": "appointmentDateTime >= now()"
               }
             ]
           }
@@ -188,7 +200,7 @@
     },
     {
       "path": "expected-endpoints.md",
-      "content": "# Expected Endpoints\n\n- `GET /api/v1/patient`\n- `POST /api/v1/doctor`\n- `PUT /api/v1/appointment/{id}`\n- `DELETE /api/v1/appointment/{id}`\n"
+      "content": "# Expected Endpoints\n\n- `GET /api/v1/patient`\n- `POST /api/v1/doctor`\n- `GET /api/clinic/appointments/{id}`\n- `POST /api/clinic/appointments`\n- `PUT /api/clinic/appointments/{id}`\n- `DELETE /api/clinic/appointments/{id}`\n"
     },
     {
       "path": "generation-notes.md",

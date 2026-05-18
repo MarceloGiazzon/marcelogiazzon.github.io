@@ -53,4 +53,4 @@ Validation remains lightweight for this checkpoint. It checks required outer fie
 
 Safe Beta0 violations are errors, not warnings. They include `reference`, `enum`, `datetime`, `search-dialog`, `now()`, `assign`, `findById`, `findAll`, `delete`, object-shaped `emitEvent.payload`, and expected active CRUD endpoints under `/api/v1`.
 
-The active outer bundle schema is now `npdev-static-generator-artifact-bundle.v4`. Responses using the older `npdev-static-generator-artifact-bundle.v2` schema are invalid.
+The active outer bundle schema is now `npdev-static-generator-artifact-bundle.v4`. Responses using the older `npdev-static-generator-artifact-bundle.v2` schema are invalid and show a stale-contract error mentioning browser cache, stale deployed `app.js`, or Gemini ignoring the contract.

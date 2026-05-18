@@ -40,6 +40,11 @@ Use `?v=safe-beta0-002` or a hard browser refresh when testing deployed Pages ou
 - flow step operations `findById`, `findAll`, `delete`
 - object-shaped `emitEvent.payload`
 - expected active CRUD endpoints under `/api/v1`
+- expected active CRUD endpoints under `/api/clinic`
+- `DELETE /...` endpoints
+- `PUT /api/...` endpoints
+- `GET /api/.../{id}` concept CRUD endpoints
+- `POST /api/...` concept CRUD endpoints outside `/api/flows/<FlowName>/execute`
 
 ## Safe Fallbacks
 
@@ -63,7 +68,9 @@ Every path listed in `manifest.json` `inputFiles` must also exist in `artifacts[
 5. Confirm the validation box says `Safe Beta0 validation: PASSED`.
 6. Preview the prompt and confirm it says `npdev-static-generator-artifact-bundle.v4`, `SAFE BETA0 HARD RULES`, forbidden advanced features, and safe fallbacks.
 7. Load `tests/fixtures/unsafe-gemini-response-clinic-appointment.json` as the raw bundle in a browser test or by pasting its JSON through the validation path.
-8. Confirm validation fails and errors mention `reference`, `search-dialog`, `datetime`, `enum`, `findById`, `findAll`, `/api/v1`, and missing manifest input artifacts.
+8. Confirm validation fails and errors mention `reference`, `search-dialog`, `datetime`, `enum`, `findById`, `findAll`, `/api/v1`, `/api/clinic`, `DELETE`, and missing manifest input artifacts.
+
+If the Worker returns `upstream_error` with status `503` or Gemini `UNAVAILABLE`, the site shows: `Gemini is temporarily unavailable or overloaded. Try again later, reduce max output tokens, or switch model.` The raw error JSON remains visible in the raw/debug panel and is not parsed as an artifact bundle.
 
 The unsafe fixture is expected to fail Safe Beta0 validation.
 
