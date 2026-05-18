@@ -4,6 +4,7 @@ Web Checkpoint 001 added a static schema contract pack for the NPDev artifact ge
 Web Checkpoint 003 keeps the browser schema pack loaded for metadata and validation, but normal Gemini prompts use compact schema summaries instead of injecting full schema text.
 Web Checkpoint 003B raises the Worker request-body hard limit to 128 KB while keeping compact prompt mode as the default.
 Web Checkpoint 004 adds lightweight NPDev schema shape checks for config paths, flow property names, invariant expressions, bindings, and manifest handoff shape.
+Web Checkpoint 004B fixes capability validation precision so `eventBus.emitEvent` is allowed while persistence remains `save`-only.
 
 ## Detected Paths
 
@@ -58,4 +59,6 @@ Safe Beta0 violations are errors, not warnings. They include `reference`, `enum`
 
 The active outer bundle schema is now `npdev-static-generator-artifact-bundle.v4`. Responses using the older `npdev-static-generator-artifact-bundle.v2` schema are invalid and show a stale-contract error mentioning browser cache, stale deployed `app.js`, or Gemini ignoring the contract.
 
-Checkpoint 004 also rejects artifacts that look conservative but use the wrong shape, such as `flow.concept`, field-map `flow.input`, `step.capability`, `step.operation`, `step.map`, `invariant.expression`, JavaScript-like invariant expressions, empty persistence bindings, website-local config paths, or sample-style manifest keys such as `sampleId` and `primaryFlows`.
+Checkpoint 004 also rejects artifacts that look conservative but use the wrong shape, such as `flow.concept`, field-map `flow.input`, `step.capability`, `step.operation`, `step.map`, `invariant.expression`, JavaScript-like invariant expressions, empty persistence bindings, website-local config paths, or sample-style manifest keys such as `sampleId`, `category`, and `primaryFlows`.
+
+Checkpoint 004B keeps object-shaped `emitEvent.payload` as a hard failure, but no longer rejects an `EventBusCapability` merely because it declares `operations: ["emitEvent"]`. The prompt now asks for canonical event steps with `event: "EventName"` and `from: "$saved"`, and for the current static artifact manifest shape rather than sample-manifest keys.

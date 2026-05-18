@@ -16,7 +16,7 @@ const state = {
   }
 };
 
-const SITE_BUILD_LABEL = 'Safe Beta0 Schema Shape Validation 004';
+const SITE_BUILD_LABEL = 'Safe Beta0 Validation Precision 004B';
 const CONTRACT_MODE = 'Safe Beta0';
 const PROMPT_CONTRACT_VERSION = 'NPDEV_PRECISE_FORMAT_GUIDE v4';
 const ARTIFACT_BUNDLE_SCHEMA_VERSION = 'npdev-static-generator-artifact-bundle.v4';
@@ -542,6 +542,14 @@ Use exactly:
 - enforceInvariants.invariants
 - invariant.expr
 
+Safe Beta0 event emission must use exactly:
+{
+  "name": "emit-event",
+  "type": "emitEvent",
+  "event": "EventName",
+  "from": "$saved"
+}
+
 Do not use:
 - flow.concept
 - field-map input objects
@@ -550,6 +558,16 @@ Do not use:
 - step.map
 - invariant.expression
 - JavaScript expressions such as .includes(), array literals, or function calls
+- emitEvent.payload
+- emitEvent.map
+- emitEvent from: "EventName"
+- object-shaped payloads
+
+If event emission is uncertain, omit the emitEvent step and document the limitation in generation-notes.md.
+
+Manifest shape rules:
+- Use id, title, complexity, mainFlow, purpose, businessStory, features, inputFiles, walkthrough, expectedOutcomes.
+- Do not use sampleId, sampleName, category, primaryFlows, ownedConcepts, or verificationTargets.
 
 Config path rules:
 - Use NPDevGenerator relative paths like "..\\Output", "..\\..\\NPDevRuntimeHost", "..\\Output\\ArtifactNP", and "..\\Output\\App".
@@ -600,6 +618,7 @@ CRITICAL FORMAT RULES:
 23. Use valid JSON only. JSON.parse must succeed.
 24. If persistence is used, model.bindings must include { "capability": "persistence", "adapter": "repository" }.
 25. If events or emitEvent steps are used, model.bindings must include { "capability": "eventBus", "adapter": "inproc" }.
+26. EventBusCapability may use operations ["emitEvent"], but persistence must use operations ["save"] only.
 
 Minimal required artifact bundle shape:
 ${buildCompactArtifactShapeGuide()}
@@ -628,6 +647,8 @@ function formatSchemaContractForPrompt(includeFullSchemas = false) {
     'Allowed Safe Beta0: field types string, uuid, integer, decimal, boolean, date; widgets text, textarea, checkbox, date, email; persistence operation save only; steps enforceInvariants, capabilityCall save, emitEvent with from, return; relationships use uuid ID fields, not reference; status uses string, not enum; endpoints use /api/flows, /api/flows/<FlowName>/execute, /api/audit, /api/correlations/{correlationId}.',
     'Forbidden Safe Beta0: reference, enum, datetime, search-dialog, now(), assign, findById, findAll, delete, object-shaped emitEvent.payload, CRUD endpoints under /api/v1, /api/clinic, or /api/<concept>.',
     'Required NPDev DSL shape: flow.input.concept, flow.input.mode, step.cap, step.op, step.args, step.out, return.value, enforceInvariants.scope, enforceInvariants.invariants, invariant.expr.',
+    'Required emitEvent shape: { name, type: "emitEvent", event: "EventName", from: "$saved" }. Do not use payload, map, from: "EventName", or object-shaped payloads.',
+    'Required manifest shape: id, title, complexity, mainFlow, purpose, businessStory, features, inputFiles, walkthrough, expectedOutcomes. Do not use sampleId, sampleName, category, primaryFlows, ownedConcepts, or verificationTargets.',
     'Forbidden invented shape: flow.concept, field-map input objects, step.capability, step.operation, step.map, invariant.expression, JavaScript expressions such as .includes(), array literals, or function calls.',
     'Required config style: NPDevGenerator relative paths such as ..\\Output, ..\\..\\NPDevRuntimeHost, ..\\Output\\ArtifactNP, and ..\\Output\\App; no website-local contracts/config.schema.json, output/<scenario>, bootstrap, artifacts, or final-exec paths.'
   ];
@@ -1137,9 +1158,10 @@ function inspectSafeBeta0Violations(model, artifacts, endpointsContent) {
     }
 
     for (const capability of Array.isArray(model.capabilities) ? model.capabilities : []) {
+      const isPersistenceCapability = capability.name === 'persistence' || capability.type === 'PersistenceCapability';
       for (const op of Array.isArray(capability.operations) ? capability.operations : []) {
-        if (!SAFE_BETA0_ALLOWED_CAPABILITY_OPS.includes(op)) {
-          errors.add(`Safe Beta0 violation: ${capability.name || 'capability'} includes ${op}. Safe Beta0 allows only save.`);
+        if (isPersistenceCapability && !SAFE_BETA0_ALLOWED_CAPABILITY_OPS.includes(op)) {
+          errors.add(`Safe Beta0 violation: persistence includes ${op}. Safe Beta0 allows only save.`);
         }
       }
     }
@@ -1159,7 +1181,8 @@ function inspectSafeBeta0Violations(model, artifacts, endpointsContent) {
         if (['findById', 'findAll', 'delete'].includes(step.op)) {
           errors.add(`Safe Beta0 violation: ${stepName} uses op ${step.op}. Safe Beta0 allows capabilityCall op save only.`);
         }
-        if (step.type === 'capabilityCall' && step.op && step.op !== 'save') {
+        const stepCap = step.cap || step.capability || '';
+        if (step.type === 'capabilityCall' && stepCap === 'persistence' && step.op && step.op !== 'save') {
           errors.add(`Safe Beta0 violation: ${stepName} uses capability operation ${step.op}. Safe Beta0 allows only save.`);
         }
         if (step.type === 'emitEvent' && step.payload && typeof step.payload === 'object' && !Array.isArray(step.payload)) {
@@ -1312,7 +1335,18 @@ function inspectModelShape(model) {
           errors.push(`Safe Beta0 schema shape violation: ${stepName} missing return.value.`);
         }
       }
-      if (step.type === 'emitEvent') usesEvents = true;
+      if (step.type === 'emitEvent') {
+        usesEvents = true;
+        if (!step.event) {
+          errors.push(`Safe Beta0 schema shape violation: ${stepName} missing event. Use emitEvent.event for the event name.`);
+        }
+        if (Object.prototype.hasOwnProperty.call(step, 'map')) {
+          errors.push(`Safe Beta0 schema shape violation: ${stepName} uses step.map. Use emitEvent.event and emitEvent.from.`);
+        }
+        if (typeof step.from === 'string' && step.from && !step.from.startsWith('$')) {
+          errors.push(`Safe Beta0 schema shape violation: ${stepName} uses from as an event name. Use event for the event name and from as a data reference such as $saved.`);
+        }
+      }
     }
   }
 
@@ -1350,7 +1384,7 @@ function inspectInvariantExpression(expr, invariantName) {
 function inspectManifestShape(manifest) {
   const errors = [];
   const required = ['id', 'title', 'complexity', 'mainFlow', 'purpose', 'businessStory', 'features', 'inputFiles', 'walkthrough', 'expectedOutcomes'];
-  const alternativeKeys = ['sampleId', 'sampleName', 'primaryFlows', 'ownedConcepts', 'verificationTargets'];
+  const alternativeKeys = ['sampleId', 'sampleName', 'category', 'primaryFlows', 'ownedConcepts', 'verificationTargets'];
 
   for (const key of required) {
     if (!Object.prototype.hasOwnProperty.call(manifest, key)) {
@@ -1799,10 +1833,12 @@ async function copyText(text, successMessage) {
 
 function buildRepairPrompt() {
   const validation = state.lastValidation || { errors: [] };
-  const errors = validation.errors && validation.errors.length
-    ? validation.errors.join('\n')
+  const errorList = validation.errors || [];
+  const errors = errorList.length
+    ? errorList.join('\n')
     : 'No validation errors were captured.';
   const raw = state.lastRaw || JSON.stringify(state.lastBundle || {}, null, 2);
+  const targetedGuidance = buildTargetedRepairGuidance(errorList);
 
   return `Repair this NPDev artifact bundle.
 
@@ -1822,10 +1858,23 @@ Rules:
 - Use NPDevGenerator config paths such as ..\\Output, ..\\..\\NPDevRuntimeHost, ..\\Output\\ArtifactNP, and ..\\Output\\App.
 - Use flow.input.concept, flow.input.mode, step.cap, step.op, step.args, step.out, enforceInvariants.scope, invariant.expr, and return.value.
 - Do not use flow.concept, field-map input objects, step.capability, step.operation, step.map, invariant.expression, JavaScript expressions, or empty bindings when persistence is used.
+${targetedGuidance}
 
 Original artifact bundle:
 ${raw}
 `;
+}
+
+function buildTargetedRepairGuidance(errors) {
+  const text = errors.join('\n');
+  const guidance = [];
+  if (/manifest\.json|sample-manifest|sampleId|sampleName|primaryFlows|ownedConcepts|verificationTargets/i.test(text)) {
+    guidance.push(`\nManifest repair:\n- Replace sampleId with id.\n- Replace sampleName with title.\n- Choose mainFlow from the first primary flow, or use ScheduleAppointment when no better value exists.\n- Convert primaryFlows, ownedConcepts, and verificationTargets into features, walkthrough, or expectedOutcomes only if useful.\n- Add complexity, purpose, and businessStory.\n- Keep inputFiles as an array and ensure every path exists in artifacts[].`);
+  }
+  if (/emitEvent\.payload|object-shaped/i.test(text)) {
+    guidance.push(`\nEvent repair:\n- Replace object-shaped emitEvent payload steps like { "type": "emitEvent", "from": "AppointmentScheduledEvent", "payload": { ... } } with { "name": "emit-event", "type": "emitEvent", "event": "AppointmentScheduledEvent", "from": "$savedAppointment" }.\n- Do not use payload, map, or from: "EventName" on emitEvent steps.`);
+  }
+  return guidance.join('\n');
 }
 
 async function copyRepairPrompt() {

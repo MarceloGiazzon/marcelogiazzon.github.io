@@ -1,0 +1,262 @@
+{
+  "schemaVersion": "npdev-static-generator-artifact-bundle.v4",
+  "project": {
+    "name": "Clinic Appointment Manager",
+    "scenarioId": "clinic-appointment-manager",
+    "objective": "Receptionists register patients and doctors, schedule appointments, change appointment status, and inspect runtime evidence.",
+    "assumptions": [
+      "This fixture isolates Checkpoint 004B manifest and event-payload validation."
+    ],
+    "warnings": [
+      "Expected to fail Safe Beta0 validation for manifest shape and object-shaped emitEvent.payload only."
+    ]
+  },
+  "artifacts": [
+    {
+      "path": "config.json",
+      "content": {
+        "$schema": "..\\..\\NPDevContract\\schemas\\config.schema.json",
+        "configVersion": "1.0",
+        "scenario": {
+          "name": "clinic-appointment-manager",
+          "description": "Fixture for Safe Beta0 validation precision.",
+          "outputRoot": "..\\Output"
+        },
+        "generator": {
+          "failIfModelMissing": true,
+          "failIfConfigMissing": true,
+          "cleanOutputBeforeGenerate": true,
+          "emitPluginAssets": true,
+          "emitRuntimeAssets": true,
+          "emitUiAssets": true
+        },
+        "bootstrap": {
+          "root": "..\\..\\NPDevRuntimeHost",
+          "mergeStrategy": "clean-copy"
+        },
+        "artifact": {
+          "root": "..\\Output\\ArtifactNP",
+          "generatedFolderName": "npdev-generated",
+          "libsFolderName": "libs",
+          "metaFolderName": "npdev-meta"
+        },
+        "finalExec": {
+          "root": "..\\Output\\App",
+          "deleteBeforeMount": true
+        },
+        "database": {
+          "provider": "docker-postgres",
+          "host": "localhost",
+          "port": 5432,
+          "database": "clinic_appointment_manager",
+          "username": "finalexec",
+          "password": "finalexec",
+          "adminDatabase": "postgres",
+          "resetMode": "reset",
+          "containerName": "npdev-clinic-appointment-manager"
+        },
+        "runtime": {
+          "springProfile": "dev,step0,trial",
+          "serverPort": 8083,
+          "javaArgs": [],
+          "gradleTask": "bootRun"
+        },
+        "trialDefaults": {
+          "apiKey": "dev-key",
+          "recommendedProfiles": "dev,step0,trial",
+          "runtimeUrl": "http://localhost:8083/",
+          "databaseMode": "step0-h2",
+          "pluginDiscoveryMode": "filesystem-folder",
+          "pluginPackageDirectory": "./npdev-generated/src/main/resources/npdev/plugin-packages"
+        }
+      }
+    },
+    {
+      "path": "model.json",
+      "content": {
+        "$schema": "contracts/model.schema.json",
+        "namespace": "trial.clinicappointmentmanager",
+        "dslVersion": "1.0.0",
+        "version": "1.0",
+        "concepts": [
+          {
+            "name": "Appointment",
+            "fields": [
+              {
+                "name": "id",
+                "type": "uuid",
+                "id": true,
+                "required": true
+              },
+              {
+                "name": "patientId",
+                "type": "uuid",
+                "required": true,
+                "ui": {
+                  "label": "Patient ID",
+                  "widget": "text"
+                }
+              },
+              {
+                "name": "doctorId",
+                "type": "uuid",
+                "required": true,
+                "ui": {
+                  "label": "Doctor ID",
+                  "widget": "text"
+                }
+              },
+              {
+                "name": "status",
+                "type": "string",
+                "required": true,
+                "ui": {
+                  "label": "Status",
+                  "widget": "text"
+                }
+              }
+            ],
+            "invariants": [
+              {
+                "name": "AppointmentPatientRequired",
+                "expr": "patientId != null && patientId != ''"
+              }
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "persistence",
+            "type": "PersistenceCapability",
+            "operations": [
+              "save"
+            ]
+          },
+          {
+            "name": "eventBus",
+            "type": "EventBusCapability",
+            "operations": [
+              "emitEvent"
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "capability": "persistence",
+            "adapter": "repository"
+          },
+          {
+            "capability": "eventBus",
+            "adapter": "inproc"
+          }
+        ],
+        "events": [
+          {
+            "name": "AppointmentScheduledEvent",
+            "payload": [
+              {
+                "name": "appointmentId",
+                "type": "uuid"
+              }
+            ]
+          }
+        ],
+        "flows": [
+          {
+            "name": "ScheduleAppointment",
+            "input": {
+              "concept": "Appointment",
+              "mode": "create"
+            },
+            "steps": [
+              {
+                "name": "validate-input",
+                "type": "enforceInvariants",
+                "scope": "Appointment",
+                "invariants": [
+                  "AppointmentPatientRequired"
+                ]
+              },
+              {
+                "name": "save-record",
+                "type": "capabilityCall",
+                "cap": "persistence",
+                "op": "save",
+                "args": [
+                  "$input"
+                ],
+                "out": "$savedAppointment"
+              },
+              {
+                "name": "emit-event",
+                "type": "emitEvent",
+                "from": "AppointmentScheduledEvent",
+                "payload": {
+                  "appointmentId": "$savedAppointment.id"
+                }
+              },
+              {
+                "name": "return-record",
+                "type": "return",
+                "value": "$savedAppointment"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "path": "manifest.json",
+      "content": {
+        "sampleId": "clinic-appointment-manager",
+        "sampleName": "Clinic Appointment Manager",
+        "category": "workflow",
+        "description": "Sample-style manifest shape is invalid for the current static artifact handoff.",
+        "primaryFlows": [
+          "ScheduleAppointment"
+        ],
+        "ownedConcepts": [
+          "Appointment"
+        ],
+        "verificationTargets": [
+          "GET /api/flows",
+          "POST /api/flows/ScheduleAppointment/execute"
+        ]
+      }
+    },
+    {
+      "path": "expected-behavior.md",
+      "content": "# Expected Behavior\n\nThis fixture is expected to fail because the manifest uses sample keys and emitEvent uses object-shaped payload.\n"
+    },
+    {
+      "path": "expected-endpoints.md",
+      "content": "# Expected Endpoints\n\n- `GET /api/flows`\n- `POST /api/flows/ScheduleAppointment/execute`\n- `GET /api/audit`\n- `GET /api/correlations/{correlationId}`\n"
+    },
+    {
+      "path": "generation-notes.md",
+      "content": "# Generation Notes\n\nExpected-fail fixture for Web Checkpoint 004B validation precision.\n"
+    }
+  ],
+  "qualityGates": {
+    "validationMode": "lightweight-contract-validation",
+    "requiredArtifacts": [
+      "config.json",
+      "model.json",
+      "manifest.json",
+      "expected-behavior.md",
+      "expected-endpoints.md",
+      "generation-notes.md"
+    ],
+    "recommendedArtifacts": [
+      "input/example-request.json"
+    ],
+    "safeBeta0Restrictions": [
+      "No object-shaped emitEvent.payload.",
+      "No sample-manifest shape for static artifact bundle handoff."
+    ],
+    "missingInformation": [],
+    "riskNotes": [
+      "eventBus.operations includes emitEvent and should not be a validation error."
+    ]
+  }
+}
