@@ -154,6 +154,23 @@ textarea {
   line-height: 1.45;
 }
 
+.contract-version {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.contract-version span {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 10px;
+  color: var(--muted);
+  background: rgba(255,255,255,0.04);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
 input:focus, select:focus, textarea:focus {
   outline: 2px solid rgba(98, 166, 255, 0.45);
   border-color: var(--accent);

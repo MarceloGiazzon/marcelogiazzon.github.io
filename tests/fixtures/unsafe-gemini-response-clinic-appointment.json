@@ -1,0 +1,212 @@
+{
+  "schemaVersion": "npdev-static-generator-artifact-bundle.v2",
+  "project": {
+    "name": "Clinic Appointment Manager",
+    "scenarioId": "clinic-appointment-manager",
+    "objective": "Manage patients, doctors, and appointments.",
+    "assumptions": [],
+    "warnings": []
+  },
+  "artifacts": [
+    {
+      "path": "config.json",
+      "content": {
+        "$schema": "contracts/config.schema.json",
+        "configVersion": "1.0",
+        "scenario": {
+          "name": "clinic-appointment-manager",
+          "description": "Unsafe regression fixture expected to fail Safe Beta0 validation.",
+          "outputRoot": "..\\Output"
+        },
+        "generator": {
+          "failIfModelMissing": true,
+          "failIfConfigMissing": true,
+          "cleanOutputBeforeGenerate": true,
+          "emitPluginAssets": true,
+          "emitRuntimeAssets": true,
+          "emitUiAssets": true
+        },
+        "bootstrap": {
+          "root": "..\\..\\NPDevRuntimeHost",
+          "mergeStrategy": "clean-copy"
+        },
+        "artifact": {
+          "root": "..\\Output\\ArtifactNP",
+          "generatedFolderName": "npdev-generated",
+          "libsFolderName": "libs",
+          "metaFolderName": "npdev-meta"
+        },
+        "finalExec": {
+          "root": "..\\Output\\App",
+          "deleteBeforeMount": true
+        },
+        "database": {
+          "provider": "docker-postgres",
+          "host": "localhost",
+          "port": 5432,
+          "database": "clinic_appointment_manager",
+          "username": "finalexec",
+          "password": "finalexec",
+          "adminDatabase": "postgres",
+          "resetMode": "reset",
+          "containerName": "npdev-clinic-appointment-manager"
+        },
+        "runtime": {
+          "springProfile": "dev,step0,trial",
+          "serverPort": 8083,
+          "javaArgs": [],
+          "gradleTask": "bootRun"
+        }
+      }
+    },
+    {
+      "path": "model.json",
+      "content": {
+        "$schema": "contracts/model.schema.json",
+        "namespace": "trial.clinic",
+        "dslVersion": "1.0.0",
+        "version": "1.0",
+        "concepts": [
+          {
+            "name": "Appointment",
+            "fields": [
+              {
+                "name": "id",
+                "type": "uuid",
+                "id": true,
+                "required": true
+              },
+              {
+                "name": "patientId",
+                "type": "reference",
+                "reference": {
+                  "target": "Patient",
+                  "displayField": "name"
+                },
+                "ui": {
+                  "label": "Patient",
+                  "widget": "search-dialog"
+                }
+              },
+              {
+                "name": "appointmentTime",
+                "type": "datetime",
+                "required": true
+              },
+              {
+                "name": "status",
+                "type": "enum",
+                "enumValues": ["SCHEDULED", "CANCELLED", "COMPLETED"]
+              }
+            ],
+            "invariants": [
+              {
+                "name": "FutureAppointment",
+                "expr": "appointmentTime >= now()"
+              }
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "persistence",
+            "type": "PersistenceCapability",
+            "operations": ["save", "findById", "findAll", "delete"]
+          }
+        ],
+        "bindings": [
+          {
+            "capability": "persistence",
+            "adapter": "repository"
+          }
+        ],
+        "flows": [
+          {
+            "name": "ScheduleAppointment",
+            "input": {
+              "concept": "Appointment",
+              "mode": "create"
+            },
+            "steps": [
+              {
+                "name": "load-patient",
+                "type": "capabilityCall",
+                "cap": "persistence",
+                "op": "findById",
+                "args": ["$input.patientId"],
+                "out": "$patient"
+              },
+              {
+                "name": "list-appointments",
+                "type": "capabilityCall",
+                "cap": "persistence",
+                "op": "findAll",
+                "out": "$appointments"
+              },
+              {
+                "name": "assign-status",
+                "type": "assign",
+                "target": "$input.status",
+                "value": "SCHEDULED"
+              },
+              {
+                "name": "emit-created",
+                "type": "emitEvent",
+                "event": "AppointmentCreated",
+                "payload": {
+                  "appointmentId": "$saved.id"
+                }
+              },
+              {
+                "name": "return-record",
+                "type": "return",
+                "value": "$saved"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "path": "manifest.json",
+      "content": {
+        "id": "clinic-appointment-manager",
+        "title": "Clinic Appointment Manager",
+        "complexity": "medium",
+        "mainFlow": "ScheduleAppointment",
+        "purpose": "Unsafe fixture.",
+        "businessStory": "Schedule appointments.",
+        "features": ["concept", "reference", "crud"],
+        "inputFiles": ["input/register-patient-request.json"],
+        "walkthrough": ["Call CRUD endpoints."],
+        "expectedOutcomes": ["CRUD works."]
+      }
+    },
+    {
+      "path": "expected-behavior.md",
+      "content": "# Expected Behavior\n\nThis unsafe fixture is expected to fail Safe Beta0 validation.\n"
+    },
+    {
+      "path": "expected-endpoints.md",
+      "content": "# Expected Endpoints\n\n- `GET /api/v1/patient`\n- `POST /api/v1/doctor`\n- `PUT /api/v1/appointment/{id}`\n- `DELETE /api/v1/appointment/{id}`\n"
+    },
+    {
+      "path": "generation-notes.md",
+      "content": "# Generation Notes\n\nUnsafe fixture used to prove Safe Beta0 hard failures.\n"
+    }
+  ],
+  "qualityGates": {
+    "validationMode": "lightweight-contract-validation",
+    "requiredArtifacts": [
+      "config.json",
+      "model.json",
+      "manifest.json",
+      "expected-behavior.md",
+      "expected-endpoints.md",
+      "generation-notes.md"
+    ],
+    "safeBeta0Restrictions": [],
+    "missingInformation": [],
+    "riskNotes": ["Expected to fail."]
+  }
+}

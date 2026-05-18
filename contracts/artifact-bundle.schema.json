@@ -12,7 +12,7 @@
   ],
   "properties": {
     "schemaVersion": {
-      "const": "npdev-static-generator-artifact-bundle.v2"
+      "const": "npdev-static-generator-artifact-bundle.v4"
     },
     "project": {
       "type": "object",
@@ -52,7 +52,7 @@
     },
     "artifacts": {
       "type": "array",
-      "minItems": 5,
+      "minItems": 6,
       "items": {
         "type": "object",
         "additionalProperties": true,
@@ -142,6 +142,19 @@
             "properties": {
               "path": {
                 "const": "expected-endpoints.md"
+              }
+            },
+            "required": [
+              "path"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "const": "generation-notes.md"
               }
             },
             "required": [

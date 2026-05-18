@@ -1,6 +1,6 @@
 # NPDev Schema Contract Pack
 
-Web Checkpoint 001 adds a static schema contract pack for the NPDev artifact generator.
+Web Checkpoint 001 added a static schema contract pack for the NPDev artifact generator. Web Checkpoint 002 keeps that pack and adds Safe Beta0 contract enforcement on top of it.
 
 ## Detected Paths
 
@@ -49,6 +49,8 @@ The manifest records SHA-256 hashes for copied and generated schemas, the select
 
 The site loads the contract pack from relative paths, displays load status, git head, copied schema names, hashes, and missing schemas. The Gemini prompt includes schema metadata plus compact schema excerpts and instructs Gemini that `config.json`, `model.json`, `manifest.json`, and the outer artifact bundle must match the loaded contracts.
 
-Validation remains lightweight for this checkpoint. It checks required outer fields, required artifacts, core config/model/manifest sections, path safety, JSON-object content for JSON artifacts, schema-pack metadata, and Safe Beta0 risk warnings.
+Validation remains lightweight for this checkpoint. It checks required outer fields, required artifacts, core config/model/manifest sections, path safety, JSON-object content for JSON artifacts, schema-pack metadata, manifest `inputFiles` consistency, and Safe Beta0 hard-fail rules.
 
-Safe Beta0 warnings cover default-risky features such as `reference`, `enum`, `search-dialog`, `now()`, `assign`, `findById`, `findAll`, `delete`, object-shaped `emitEvent.payload`, and invented `/api/v1/concepts/...` endpoints.
+Safe Beta0 violations are errors, not warnings. They include `reference`, `enum`, `datetime`, `search-dialog`, `now()`, `assign`, `findById`, `findAll`, `delete`, object-shaped `emitEvent.payload`, and expected active CRUD endpoints under `/api/v1`.
+
+The active outer bundle schema is now `npdev-static-generator-artifact-bundle.v4`. Responses using the older `npdev-static-generator-artifact-bundle.v2` schema are invalid.

@@ -7,6 +7,7 @@ const state = {
   lastRaw: '',
   lastBundle: null,
   lastFiles: [],
+  lastValidation: null,
   schemaPack: {
     status: 'loading',
     manifest: null,
@@ -15,6 +16,10 @@ const state = {
   }
 };
 
+const SITE_BUILD_LABEL = 'Safe Beta0 Contract Enforcement 002';
+const CONTRACT_MODE = 'Safe Beta0';
+const PROMPT_CONTRACT_VERSION = 'NPDEV_PRECISE_FORMAT_GUIDE v4';
+const ARTIFACT_BUNDLE_SCHEMA_VERSION = 'npdev-static-generator-artifact-bundle.v4';
 const VALIDATION_MODE = 'lightweight-contract-validation';
 
 const SCHEMA_PACK_PATHS = {
@@ -33,24 +38,31 @@ const SCHEMA_PROMPT_CHAR_LIMITS = {
 };
 
 const SAFE_BETA0_RESTRICTIONS = [
-  'no reference fields by default',
-  'no enum fields by default',
-  'no search-dialog widgets by default',
-  'no now() expressions by default',
-  'no assign flow steps by default',
-  'no findById flow steps by default',
-  'no findAll flow steps by default',
-  'no delete flow steps by default',
-  'no object-shaped emitEvent.payload by default',
-  'no invented /api/v1/concepts/... endpoints'
+  'no reference fields',
+  'no enum fields',
+  'no datetime fields',
+  'no search-dialog widgets',
+  'no now() expressions',
+  'no assign flow steps',
+  'no findById operations or steps',
+  'no findAll operations or steps',
+  'no delete operations or steps',
+  'no object-shaped emitEvent.payload',
+  'no CRUD endpoints under /api/v1'
 ];
+
+const SAFE_BETA0_ALLOWED_FIELD_TYPES = ['string', 'uuid', 'integer', 'decimal', 'boolean', 'date'];
+const SAFE_BETA0_ALLOWED_WIDGETS = ['text', 'textarea', 'checkbox', 'date', 'email'];
+const SAFE_BETA0_ALLOWED_CAPABILITY_OPS = ['save'];
+const SAFE_BETA0_ALLOWED_FLOW_STEPS = ['enforceInvariants', 'capabilityCall', 'emitEvent', 'return'];
 
 const REQUIRED_ARTIFACT_PATHS = [
   'config.json',
   'model.json',
   'manifest.json',
   'expected-behavior.md',
-  'expected-endpoints.md'
+  'expected-endpoints.md',
+  'generation-notes.md'
 ];
 
 const OPTIONAL_ARTIFACT_PATHS = [
@@ -59,7 +71,7 @@ const OPTIONAL_ARTIFACT_PATHS = [
 ];
 
 const NPDEV_RESPONSE_SCHEMA_HINT = {
-  schemaVersion: 'npdev-static-generator-artifact-bundle.v2',
+  schemaVersion: ARTIFACT_BUNDLE_SCHEMA_VERSION,
   project: {
     name: 'string',
     scenarioId: 'kebab-case-string',
@@ -147,17 +159,12 @@ const NPDEV_RESPONSE_SCHEMA_HINT = {
             fields: [
               {
                 name: 'camelCaseField',
-                type: 'uuid|string|integer|decimal|boolean|date|datetime|enum|reference',
+                type: 'uuid|string|integer|decimal|boolean|date',
                 id: true,
                 required: true,
-                enumValues: ['optional for enum'],
-                reference: {
-                  target: 'OtherConcept',
-                  displayField: 'name'
-                },
                 ui: {
                   label: 'Human label',
-                  widget: 'text|textarea|select|checkbox|date|email|search-dialog'
+                  widget: 'text|textarea|checkbox|date|email'
                 }
               }
             ],
@@ -276,6 +283,16 @@ function setStatus(kind, title, message) {
   $('statusMessage').textContent = message;
 }
 
+function siteContractSummary() {
+  return {
+    siteBuild: SITE_BUILD_LABEL,
+    contractMode: CONTRACT_MODE,
+    promptContract: PROMPT_CONTRACT_VERSION,
+    bundleSchema: ARTIFACT_BUNDLE_SCHEMA_VERSION,
+    validationMode: VALIDATION_MODE
+  };
+}
+
 async function fetchJsonContract(path) {
   const response = await fetch(path, { cache: 'no-store' });
   if (!response.ok) {
@@ -328,6 +345,8 @@ function schemaPackSummary() {
   return {
     status: pack.status,
     validationMode: manifest.validationMode || VALIDATION_MODE,
+    activeBundleSchemaVersion: ARTIFACT_BUNDLE_SCHEMA_VERSION,
+    promptContract: PROMPT_CONTRACT_VERSION,
     schemaPackVersion: manifest.schemaPackVersion || 'unknown',
     gitHead: manifest.gitHead || 'unknown',
     schemas: schemaRows.map((schema) => ({
@@ -439,6 +458,12 @@ function buildNpdevPrompt(input) {
 
   return `You are generating input artifacts for NPDevGenerator, not generic application code.
 
+SITE CONTRACT:
+- Site contract mode: ${CONTRACT_MODE}
+- Prompt contract: ${PROMPT_CONTRACT_VERSION}
+- Bundle schema: ${ARTIFACT_BUNDLE_SCHEMA_VERSION}
+- Validation mode: ${VALIDATION_MODE}
+
 NPDevGenerator consumes a folder similar to:
 Input/
   config.json
@@ -471,9 +496,34 @@ ${schemaContract}
 SAFE BETA0 DEFAULT RESTRICTIONS:
 ${SAFE_BETA0_RESTRICTIONS.map((restriction) => `- ${restriction}`).join('\n')}
 
+SAFE BETA0 HARD RULES:
+If you generate any forbidden advanced feature, the artifact will be rejected.
+
+Forbidden in Safe Beta0:
+- type "reference"
+- type "enum"
+- type "datetime"
+- widget "search-dialog"
+- invariant functions like now()
+- step type "assign"
+- persistence operations "findById", "findAll", "delete"
+- object-shaped emitEvent.payload
+- CRUD endpoints under /api/v1
+
+Use these safe fallbacks:
+- relationships: uuid fields such as patientId, doctorId
+- status: string field; document allowed values in markdown
+- date/time: date field or string field; document expected format
+- retrieval: do not promise findAll endpoints
+- updates: full-object save only if supported, otherwise document as future
+- endpoints: use /api/flows and /api/flows/<FlowName>/execute
+
+If the user objective asks for advanced features, do not generate them in Safe Beta0.
+Use safe fallback fields and record the limitation in generation-notes.md and qualityGates.riskNotes.
+
 CRITICAL FORMAT RULES:
 1. Return JSON only. No markdown fence. No commentary outside JSON.
-2. The outer response must match schemaVersion "npdev-static-generator-artifact-bundle.v2".
+2. The response must use schemaVersion "${ARTIFACT_BUNDLE_SCHEMA_VERSION}".
 3. artifacts must be an array of objects with path and content.
 4. config.json must match the loaded NPDev config schema from contracts/config.schema.json.
 5. model.json must match the loaded NPDev model schema from contracts/model.schema.json.
@@ -502,14 +552,16 @@ CRITICAL FORMAT RULES:
 11. expected-behavior.md and expected-endpoints.md must explain what NPDev runtime should expose and how to validate it.
 12. Do not output Java, TypeScript, SQL, Gradle, or Docker files.
 13. Do not invent unsupported custom runtime code.
-14. Keep Safe Beta0 restrictions unless the user explicitly requested a risk and qualityGates.warnings documents it.
-15. Do not invent /api/v1/concepts/... endpoints. Prefer runtime flow and evidence endpoints already used by NPDev Beta0 examples.
+14. Keep Safe Beta0 restrictions. Advanced mode is not active in this site.
+15. Do not invent CRUD endpoints under /api/v1. Prefer runtime flow and evidence endpoints already used by NPDev Beta0 examples.
 16. If something is uncertain, make a conservative assumption and record it in project.assumptions and qualityGates.missingInformation.
 17. qualityGates.validationMode must be "${VALIDATION_MODE}".
 18. qualityGates.requiredArtifacts must list ${REQUIRED_ARTIFACT_PATHS.join(', ')}.
 19. qualityGates.safeBeta0Restrictions must list the Safe Beta0 restrictions above.
-20. Keep the model small. Prefer 1 to 4 concepts and 1 to 3 flows.
-21. Use valid JSON only. JSON.parse must succeed.
+20. manifest.inputFiles must reference only files also present in artifacts[]. Use input/example-request.json if you include a sample input.
+21. expected-endpoints.md must list only conservative runtime endpoints: GET /api/flows, POST /api/flows/<FlowName>/execute, GET /api/audit, GET /api/correlations/{correlationId}.
+22. Keep the model small. Prefer 1 to 4 concepts and 1 to 3 flows.
+23. Use valid JSON only. JSON.parse must succeed.
 
 Expected outer JSON shape:
 ${JSON.stringify(NPDEV_RESPONSE_SCHEMA_HINT, null, 2)}
@@ -530,6 +582,8 @@ function formatSchemaContractForPrompt() {
   return [
     `Schema pack version: ${summary.schemaPackVersion}`,
     `Git head: ${summary.gitHead}`,
+    `Prompt contract: ${summary.promptContract}`,
+    `Active bundle schema: ${summary.activeBundleSchemaVersion}`,
     `Validation mode in this browser: ${summary.validationMode}`,
     `Copied schemas: ${summary.schemas.map((schema) => `${schema.name} sha256=${schema.sha256}`).join('; ')}`,
     `Missing schemas: ${summary.missingSchemas.length ? summary.missingSchemas.join(', ') : 'none'}`,
@@ -574,6 +628,7 @@ async function callCloudflareWorker(input, prompt) {
       schemaHint: JSON.stringify({
         responseShape: NPDEV_RESPONSE_SCHEMA_HINT,
         schemaPack: schemaPackSummary(),
+        siteContract: siteContractSummary(),
         validationMode: VALIDATION_MODE,
         safeBeta0Restrictions: SAFE_BETA0_RESTRICTIONS
       }),
@@ -764,13 +819,14 @@ function validateArtifacts(bundle, artifacts) {
   const errors = [];
   const warnings = [];
   const paths = new Set(artifacts.map((artifact) => artifact.path));
+  const getArtifact = (path) => artifacts.find((artifact) => artifact.path === path);
 
   if (!bundle || typeof bundle !== 'object') {
     errors.push('Outer response must be a JSON object.');
   }
 
-  if (bundle.schemaVersion !== 'npdev-static-generator-artifact-bundle.v2') {
-    warnings.push('Outer schemaVersion is missing or not v2.');
+  if (bundle.schemaVersion !== ARTIFACT_BUNDLE_SCHEMA_VERSION) {
+    errors.push(`Invalid artifact bundle schemaVersion. Expected ${ARTIFACT_BUNDLE_SCHEMA_VERSION}. This usually means the site prompt is stale, browser cache is stale, or Gemini ignored the contract.`);
   }
 
   if (!bundle.project || typeof bundle.project !== 'object') errors.push('Outer response missing required top-level field: project.');
@@ -797,9 +853,10 @@ function validateArtifacts(bundle, artifacts) {
     if (!paths.has(required)) errors.push(`Missing required artifact: ${required}`);
   }
 
-  const config = artifacts.find((a) => a.path === 'config.json')?.content;
-  const model = artifacts.find((a) => a.path === 'model.json')?.content;
-  const manifest = artifacts.find((a) => a.path === 'manifest.json')?.content;
+  const config = getArtifact('config.json')?.content;
+  const model = getArtifact('model.json')?.content;
+  const manifest = getArtifact('manifest.json')?.content;
+  const endpoints = getArtifact('expected-endpoints.md')?.content;
 
   if (!config || typeof config !== 'object') errors.push('config.json must be JSON object content.');
   if (!model || typeof model !== 'object') errors.push('model.json must be JSON object content.');
@@ -821,6 +878,14 @@ function validateArtifacts(bundle, artifacts) {
   if (manifest && typeof manifest === 'object') {
     if (!manifest.id) errors.push('manifest.json must include id.');
     if (!manifest.mainFlow) warnings.push('manifest.json should include mainFlow.');
+    if (Array.isArray(manifest.inputFiles)) {
+      for (const inputFile of manifest.inputFiles) {
+        const inputPath = String(inputFile || '').trim();
+        if (inputPath && !paths.has(inputPath)) {
+          errors.push(`Manifest references ${inputPath} but the artifact bundle does not include it.`);
+        }
+      }
+    }
   }
 
   for (const artifact of artifacts) {
@@ -831,10 +896,10 @@ function validateArtifacts(bundle, artifacts) {
     }
   }
 
-  warnings.push(...inspectSafeBeta0Risks(model, artifacts));
+  errors.push(...inspectSafeBeta0Violations(model, artifacts, endpoints));
 
   return {
-    errors,
+    errors: [...new Set(errors)],
     warnings: [...new Set(warnings)],
     passed: errors.length === 0,
     validationMode: VALIDATION_MODE,
@@ -842,21 +907,36 @@ function validateArtifacts(bundle, artifacts) {
   };
 }
 
-function inspectSafeBeta0Risks(model, artifacts) {
-  const warnings = new Set();
+function inspectSafeBeta0Violations(model, artifacts, endpointsContent) {
+  const errors = new Set();
 
   if (model && typeof model === 'object') {
     for (const concept of Array.isArray(model.concepts) ? model.concepts : []) {
       for (const field of Array.isArray(concept.fields) ? concept.fields : []) {
         const fieldName = `${concept.name || 'concept'}.${field.name || 'field'}`;
-        if (field.type === 'reference' || field.reference) warnings.add(`Safe Beta0 warning: ${fieldName} uses reference; review before generation.`);
-        if (field.type === 'enum' || Array.isArray(field.enumValues)) warnings.add(`Safe Beta0 warning: ${fieldName} uses enum; review before generation.`);
-        if (field.ui && field.ui.widget === 'search-dialog') warnings.add(`Safe Beta0 warning: ${fieldName} uses search-dialog; review before generation.`);
+        if (field.type === 'reference' || field.reference) errors.add(`Safe Beta0 violation: ${fieldName} uses type reference. Use type uuid plus label ${humanizeFieldLabel(field.name)}.`);
+        if (field.type === 'enum' || Array.isArray(field.enumValues)) errors.add(`Safe Beta0 violation: ${fieldName} uses type enum. Use type string and document allowed values.`);
+        if (field.type === 'datetime') errors.add(`Safe Beta0 violation: ${fieldName} uses type datetime. Use type date or string and document the expected format.`);
+        if (field.type && !SAFE_BETA0_ALLOWED_FIELD_TYPES.includes(field.type)) {
+          errors.add(`Safe Beta0 violation: ${fieldName} uses unsupported type ${field.type}. Allowed types: ${SAFE_BETA0_ALLOWED_FIELD_TYPES.join(', ')}.`);
+        }
+        if (field.ui && field.ui.widget === 'search-dialog') errors.add(`Safe Beta0 violation: ${fieldName} uses widget search-dialog. Use a uuid ID field plus a plain text label.`);
+        if (field.ui && field.ui.widget && !SAFE_BETA0_ALLOWED_WIDGETS.includes(field.ui.widget)) {
+          errors.add(`Safe Beta0 violation: ${fieldName} uses unsupported widget ${field.ui.widget}. Allowed widgets: ${SAFE_BETA0_ALLOWED_WIDGETS.join(', ')}.`);
+        }
       }
 
       for (const invariant of Array.isArray(concept.invariants) ? concept.invariants : []) {
         if (typeof invariant.expr === 'string' && /\bnow\s*\(/i.test(invariant.expr)) {
-          warnings.add(`Safe Beta0 warning: invariant ${invariant.name || 'unnamed'} uses now(); review before generation.`);
+          errors.add(`Safe Beta0 violation: invariant ${invariant.name || 'unnamed'} uses now(). Use explicit input fields or document the time rule in markdown.`);
+        }
+      }
+    }
+
+    for (const capability of Array.isArray(model.capabilities) ? model.capabilities : []) {
+      for (const op of Array.isArray(capability.operations) ? capability.operations : []) {
+        if (!SAFE_BETA0_ALLOWED_CAPABILITY_OPS.includes(op)) {
+          errors.add(`Safe Beta0 violation: ${capability.name || 'capability'} includes ${op}. Safe Beta0 allows only save.`);
         }
       }
     }
@@ -864,24 +944,40 @@ function inspectSafeBeta0Risks(model, artifacts) {
     for (const flow of Array.isArray(model.flows) ? model.flows : []) {
       for (const step of Array.isArray(flow.steps) ? flow.steps : []) {
         const stepName = `${flow.name || 'flow'}.${step.name || step.type || 'step'}`;
+        if (step.type && !SAFE_BETA0_ALLOWED_FLOW_STEPS.includes(step.type)) {
+          errors.add(`Safe Beta0 violation: ${stepName} uses step type ${step.type}. Allowed flow steps: ${SAFE_BETA0_ALLOWED_FLOW_STEPS.join(', ')}.`);
+        }
         if (['assign', 'findById', 'findAll', 'delete'].includes(step.type)) {
-          warnings.add(`Safe Beta0 warning: ${stepName} uses ${step.type}; review before generation.`);
+          errors.add(`Safe Beta0 violation: ${stepName} uses ${step.type}. Safe Beta0 does not support that flow step.`);
+        }
+        if (['findById', 'findAll', 'delete'].includes(step.op)) {
+          errors.add(`Safe Beta0 violation: ${stepName} uses op ${step.op}. Safe Beta0 allows capabilityCall op save only.`);
+        }
+        if (step.type === 'capabilityCall' && step.op && step.op !== 'save') {
+          errors.add(`Safe Beta0 violation: ${stepName} uses capability operation ${step.op}. Safe Beta0 allows only save.`);
         }
         if (step.type === 'emitEvent' && step.payload && typeof step.payload === 'object' && !Array.isArray(step.payload)) {
-          warnings.add(`Safe Beta0 warning: ${stepName} uses object-shaped emitEvent.payload; review before generation.`);
+          errors.add(`Safe Beta0 violation: ${stepName} uses object-shaped emitEvent.payload. Use emitEvent with from.`);
         }
       }
     }
   }
 
-  for (const artifact of artifacts) {
-    const text = artifactContentToString(artifact.content, artifact.path);
-    if (/\/api\/v1\/concepts\//i.test(text)) {
-      warnings.add(`Safe Beta0 warning: ${artifact.path} mentions invented /api/v1/concepts/... endpoints.`);
-    }
+  const endpointText = typeof endpointsContent === 'string'
+    ? endpointsContent
+    : artifactContentToString(endpointsContent, 'expected-endpoints.md');
+  if (/(^|\s)(GET|POST|PUT|PATCH|DELETE)\s+\/api\/v1\b|\/api\/v1\b/i.test(endpointText)) {
+    errors.add('Safe Beta0 violation: expected-endpoints.md contains /api/v1 CRUD endpoints. Use flow endpoints only.');
   }
 
-  return [...warnings];
+  return [...errors];
+}
+
+function humanizeFieldLabel(value) {
+  return String(value || 'ID')
+    .replace(/Id$/, ' ID')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/^./, (char) => char.toUpperCase());
 }
 
 function artifactContentToString(content, path) {
@@ -894,11 +990,13 @@ function artifactContentToString(content, path) {
 function renderArtifacts(artifacts, validation) {
   const list = $('artifactList');
   list.innerHTML = '';
+  state.lastValidation = validation;
 
   if (!artifacts.length) {
     $('validationBox').className = 'validation-box error';
     $('validationBox').textContent = 'No artifacts were found in the response.';
-    setDownloadButtons(false);
+    setDownloadButtons({ bundle: false, zip: false });
+    setRepairPromptButton(false);
     return;
   }
 
@@ -926,12 +1024,16 @@ function renderArtifacts(artifacts, validation) {
     list.appendChild(card);
   }
 
-  setDownloadButtons(true);
+  setDownloadButtons({ bundle: true, zip: validation.passed });
+  setRepairPromptButton(!validation.passed);
 }
 
 function renderValidationMessage(validation, artifacts) {
   const parts = [];
-  parts.push(`<strong>${validation.passed ? 'Artifact validation passed' : 'Artifact validation failed'}</strong>`);
+  parts.push(`<strong>Safe Beta0 validation: ${validation.passed ? 'PASSED' : 'FAILED'}</strong>`);
+  if (!validation.passed) {
+    parts.push('Artifact ZIP download is disabled until validation passes.');
+  }
   parts.push(`${artifacts.length} file(s) generated.`);
   parts.push(`Validation mode: <code>${escapeHtml(validation.validationMode || VALIDATION_MODE)}</code>.`);
   if (validation.schemaPack) {
@@ -962,9 +1064,17 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
-function setDownloadButtons(enabled) {
-  $('downloadZipButton').disabled = !enabled;
-  $('downloadBundleButton').disabled = !enabled;
+function setDownloadButtons(options) {
+  const stateOptions = typeof options === 'boolean' ? { bundle: options, zip: options } : options;
+  $('downloadZipButton').disabled = !stateOptions.zip;
+  $('downloadBundleButton').disabled = !stateOptions.bundle;
+}
+
+function setRepairPromptButton(enabled) {
+  const button = $('copyRepairPromptButton');
+  if (!button) return;
+  button.disabled = !enabled;
+  button.classList.toggle('hidden', !enabled);
 }
 
 function buildMockBundle(input) {
@@ -976,7 +1086,7 @@ function buildMockBundle(input) {
   const mainFlow = input.mainFlow || 'ScheduleAppointment';
 
   return {
-    schemaVersion: 'npdev-static-generator-artifact-bundle.v2',
+    schemaVersion: ARTIFACT_BUNDLE_SCHEMA_VERSION,
     project: {
       name,
       scenarioId,
@@ -1118,7 +1228,7 @@ function buildMockBundle(input) {
       },
       {
         path: 'expected-endpoints.md',
-        content: `# Expected Endpoints\n\n- \`GET /api/flows\`\n- \`POST /api/flows/${mainFlow}/execute\`\n- \`GET /api/audit\`\n- \`GET /api/correlations/{correlationId}\`\n- \`GET /api/admin/model/export\`\n`
+        content: `# Expected Endpoints\n\n- \`GET /api/flows\`\n- \`POST /api/flows/${mainFlow}/execute\`\n- \`GET /api/audit\`\n- \`GET /api/correlations/{correlationId}\`\n`
       },
       {
         path: 'generation-notes.md',
@@ -1282,17 +1392,51 @@ async function copyText(text, successMessage) {
   setStatus('ready', 'Copied', successMessage || 'Copied to clipboard.');
 }
 
+function buildRepairPrompt() {
+  const validation = state.lastValidation || { errors: [] };
+  const errors = validation.errors && validation.errors.length
+    ? validation.errors.join('\n')
+    : 'No validation errors were captured.';
+  const raw = state.lastRaw || JSON.stringify(state.lastBundle || {}, null, 2);
+
+  return `Repair this NPDev artifact bundle.
+
+Validation errors:
+${errors}
+
+Rules:
+- Return JSON only.
+- Keep schemaVersion ${ARTIFACT_BUNDLE_SCHEMA_VERSION}.
+- Remove all Safe Beta0 forbidden features.
+- Replace reference with uuid ID fields.
+- Replace enum with string.
+- Replace datetime with date or string.
+- Remove findById/findAll/delete.
+- Replace CRUD endpoints with /api/flows endpoints.
+- Ensure every manifest inputFiles entry exists in artifacts[].
+
+Original artifact bundle:
+${raw}
+`;
+}
+
+async function copyRepairPrompt() {
+  await copyText(buildRepairPrompt(), 'Repair prompt copied.');
+}
+
 function clearOutput() {
   state.lastPrompt = '';
   state.lastRaw = '';
   state.lastBundle = null;
   state.lastFiles = [];
+  state.lastValidation = null;
   $('promptOutput').value = '';
   $('rawOutput').value = '';
   $('artifactList').innerHTML = '';
   $('validationBox').className = 'validation-box';
   $('validationBox').textContent = 'No artifact generated yet.';
-  setDownloadButtons(false);
+  setDownloadButtons({ bundle: false, zip: false });
+  setRepairPromptButton(false);
   setStatus('ready', 'Ready', 'Output cleared.');
 }
 
@@ -1336,8 +1480,11 @@ async function handleGenerate() {
   state.lastPrompt = prompt;
   $('promptOutput').value = prompt;
   $('rawOutput').value = '';
+  state.lastValidation = null;
+  setRepairPromptButton(false);
 
   try {
+    console.info('[NPDev] generation contract', siteContractSummary());
     setStatus('busy', 'Generating', input.provider === 'mock' ? 'Generating mock artifacts.' : 'Calling Cloudflare Worker proxy.');
     const raw = await callProvider(input, prompt);
     state.lastRaw = raw;
@@ -1383,6 +1530,7 @@ function init() {
   $('loadExampleButton').addEventListener('click', loadExample);
   $('downloadBundleButton').addEventListener('click', downloadBundleJson);
   $('downloadZipButton').addEventListener('click', downloadZip);
+  $('copyRepairPromptButton').addEventListener('click', copyRepairPrompt);
   $('copyPromptButton').addEventListener('click', () => copyText($('promptOutput').value, 'Prompt copied.'));
   $('copyRawButton').addEventListener('click', () => copyText($('rawOutput').value, 'Raw response copied.'));
   $('provider').addEventListener('change', updateProviderDefaults);

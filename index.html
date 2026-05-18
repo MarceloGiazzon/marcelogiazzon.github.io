@@ -17,6 +17,13 @@
           Describe the project objective, call the Cloudflare Worker proxy, review the generated NPDev input files,
           and download a ZIP ready to copy into a sample <code>Input</code> folder.
         </p>
+        <div class="contract-version" aria-label="Active site contract">
+          <span>Site build: Safe Beta0 Contract Enforcement 002</span>
+          <span>Site contract mode: Safe Beta0</span>
+          <span>Prompt contract: NPDEV_PRECISE_FORMAT_GUIDE v4</span>
+          <span>Bundle schema: npdev-static-generator-artifact-bundle.v4</span>
+          <span>Validation mode: lightweight-contract-validation</span>
+        </div>
       </div>
       <div class="status-card" aria-live="polite">
         <span class="status-dot" id="statusDot"></span>
@@ -180,6 +187,7 @@
         <h2>5. Generated artifacts</h2>
         <div class="button-row right">
           <button type="button" class="secondary-button" id="downloadBundleButton" disabled>Download bundle JSON</button>
+          <button type="button" class="ghost-button hidden" id="copyRepairPromptButton" disabled>Copy repair prompt</button>
           <button type="button" class="primary-button" id="downloadZipButton" disabled>Download artifacts ZIP</button>
         </div>
       </div>
@@ -195,6 +203,6 @@
     </div>
   </footer>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=safe-beta0-002"></script>
 </body>
 </html>
