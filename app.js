@@ -277,7 +277,7 @@ function getFormValues() {
     model: $('model').value.trim() || 'gemini-2.5-flash',
     endpoint: $('endpoint').value.trim(),
     temperature: Number($('temperature').value || 0.1),
-    maxTokens: Number($('maxTokens').value || 8000)
+    maxTokens: Number($('maxTokens').value || 12000)
   };
 }
 
@@ -406,11 +406,128 @@ function formatApiError(prefix, data) {
 }
 
 function parseArtifactBundle(rawText) {
+  console.groupCollapsed('[NPDev] parseArtifactBundle raw response');
+  console.log(rawText);
+  console.groupEnd();
+
   const cleaned = extractJsonText(rawText);
-  const parsed = JSON.parse(cleaned);
+
+  console.groupCollapsed('[NPDev] parseArtifactBundle extracted JSON candidate');
+  console.log(cleaned);
+  console.groupEnd();
+
+  const parsed = parseJsonWithDiagnostics(cleaned, rawText);
   const artifacts = normalizeArtifacts(parsed);
   const validation = validateArtifacts(parsed, artifacts);
   return { bundle: parsed, artifacts, validation };
+}
+
+function parseJsonWithDiagnostics(cleanedText, rawText) {
+  const attempts = [
+    { name: 'direct', text: cleanedText },
+    { name: 'without trailing commas', text: removeTrailingCommas(cleanedText) },
+    { name: 'balanced braces fallback', text: sliceToLastBalancedObject(removeTrailingCommas(cleanedText)) }
+  ];
+
+  const failures = [];
+
+  for (const attempt of attempts) {
+    try {
+      return JSON.parse(attempt.text);
+    } catch (error) {
+      const position = extractErrorPosition(error.message);
+      failures.push({
+        name: attempt.name,
+        message: error.message,
+        position,
+        preview: buildJsonErrorPreview(attempt.text, position)
+      });
+    }
+  }
+
+  console.group('[NPDev] JSON parse failed');
+  console.log('Raw response:', rawText);
+  console.log('Cleaned response:', cleanedText);
+  console.table(failures.map((failure) => ({
+    attempt: failure.name,
+    message: failure.message,
+    position: failure.position
+  })));
+  for (const failure of failures) {
+    console.log(`Preview for ${failure.name}:`, failure.preview);
+  }
+  console.groupEnd();
+
+  const error = new Error(
+    'The AI returned invalid JSON. Open DevTools Console and look for [NPDev] JSON parse failed. ' +
+    'The raw response is preserved in the Raw AI response box. Regenerate, lower complexity, or increase Max output tokens.'
+  );
+  error.failures = failures;
+  throw error;
+}
+
+function removeTrailingCommas(text) {
+  return String(text || '').replace(/,\s*([}\]])/g, '$1');
+}
+
+function sliceToLastBalancedObject(text) {
+  const source = String(text || '');
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  let start = -1;
+  let lastBalancedEnd = -1;
+
+  for (let i = 0; i < source.length; i++) {
+    const ch = source[i];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (ch === '\\') {
+        escaped = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (ch === '{') {
+      if (depth === 0 && start < 0) start = i;
+      depth++;
+    } else if (ch === '}') {
+      depth--;
+      if (depth === 0) lastBalancedEnd = i + 1;
+      if (depth < 0) break;
+    }
+  }
+
+  if (start >= 0 && lastBalancedEnd > start) {
+    return source.slice(start, lastBalancedEnd);
+  }
+
+  return source;
+}
+
+function extractErrorPosition(message) {
+  const match = String(message || '').match(/position\s+(\d+)/i);
+  return match ? Number(match[1]) : null;
+}
+
+function buildJsonErrorPreview(text, position) {
+  const source = String(text || '');
+  if (!Number.isFinite(position)) {
+    return source.slice(0, 800);
+  }
+
+  const start = Math.max(0, position - 500);
+  const end = Math.min(source.length, position + 500);
+  return source.slice(start, end);
 }
 
 function extractJsonText(rawText) {
@@ -933,6 +1050,10 @@ async function handleGenerate() {
     state.lastRaw = raw;
     $('rawOutput').value = raw;
 
+    console.groupCollapsed('[NPDev] raw provider response');
+    console.log(raw);
+    console.groupEnd();
+
     const { bundle, artifacts, validation } = parseArtifactBundle(raw);
     state.lastBundle = bundle;
     state.lastFiles = artifacts;
@@ -944,8 +1065,11 @@ async function handleGenerate() {
       setStatus('error', 'Validation failed', 'The AI responded, but artifact validation found issues.');
     }
   } catch (error) {
+    console.error('[NPDev] Generation or parse failed', error);
     setStatus('error', 'Generation failed', error.message);
-    $('rawOutput').value = error.stack || error.message;
+    if (!$('rawOutput').value) {
+      $('rawOutput').value = error.stack || error.message;
+    }
   }
 }
 
