@@ -1,0 +1,202 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://marcelogiazzon.github.io/contracts/artifact-bundle.schema.json",
+  "title": "NPDev static generator artifact bundle",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schemaVersion",
+    "project",
+    "artifacts",
+    "qualityGates"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "npdev-static-generator-artifact-bundle.v2"
+    },
+    "project": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "name",
+        "scenarioId",
+        "objective"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "scenarioId": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "objective": {
+          "type": "string",
+          "minLength": 1
+        },
+        "assumptions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "path",
+          "content"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._/-]+$",
+            "not": {
+              "pattern": "\\.\\."
+            }
+          },
+          "content": {}
+        }
+      },
+      "contains": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "const": "config.json"
+          }
+        },
+        "required": [
+          "path"
+        ]
+      },
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "const": "config.json"
+              }
+            },
+            "required": [
+              "path"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "const": "model.json"
+              }
+            },
+            "required": [
+              "path"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "const": "manifest.json"
+              }
+            },
+            "required": [
+              "path"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "const": "expected-behavior.md"
+              }
+            },
+            "required": [
+              "path"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "const": "expected-endpoints.md"
+              }
+            },
+            "required": [
+              "path"
+            ]
+          }
+        }
+      ]
+    },
+    "qualityGates": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "validationMode",
+        "requiredArtifacts",
+        "safeBeta0Restrictions"
+      ],
+      "properties": {
+        "validationMode": {
+          "enum": [
+            "lightweight-contract-validation",
+            "full-json-schema-validation"
+          ]
+        },
+        "requiredArtifacts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "recommendedArtifacts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "safeBeta0Restrictions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "missingInformation": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

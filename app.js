@@ -6,8 +6,44 @@ const state = {
   lastPrompt: '',
   lastRaw: '',
   lastBundle: null,
-  lastFiles: []
+  lastFiles: [],
+  schemaPack: {
+    status: 'loading',
+    manifest: null,
+    schemas: {},
+    errors: []
+  }
 };
+
+const VALIDATION_MODE = 'lightweight-contract-validation';
+
+const SCHEMA_PACK_PATHS = {
+  manifest: 'contracts/npdev-contract-manifest.json',
+  config: 'contracts/config.schema.json',
+  model: 'contracts/model.schema.json',
+  manifestSchema: 'contracts/manifest.schema.json',
+  artifactBundle: 'contracts/artifact-bundle.schema.json'
+};
+
+const SCHEMA_PROMPT_CHAR_LIMITS = {
+  'artifact-bundle.schema.json': 6500,
+  'config.schema.json': 6500,
+  'model.schema.json': 14000,
+  'manifest.schema.json': 3000
+};
+
+const SAFE_BETA0_RESTRICTIONS = [
+  'no reference fields by default',
+  'no enum fields by default',
+  'no search-dialog widgets by default',
+  'no now() expressions by default',
+  'no assign flow steps by default',
+  'no findById flow steps by default',
+  'no findAll flow steps by default',
+  'no delete flow steps by default',
+  'no object-shaped emitEvent.payload by default',
+  'no invented /api/v1/concepts/... endpoints'
+];
 
 const REQUIRED_ARTIFACT_PATHS = [
   'config.json',
@@ -35,7 +71,7 @@ const NPDEV_RESPONSE_SCHEMA_HINT = {
     {
       path: 'config.json',
       content: {
-        $schema: '..\\\\..\\\\NPDevContract\\\\schemas\\\\config.schema.json',
+        $schema: 'contracts/config.schema.json',
         configVersion: '1.0',
         scenario: {
           name: 'kebab-case-scenario-id',
@@ -95,7 +131,7 @@ const NPDEV_RESPONSE_SCHEMA_HINT = {
     {
       path: 'model.json',
       content: {
-        $schema: '..\\\\..\\\\NPDevContract\\\\schemas\\\\model.schema.json',
+        $schema: 'contracts/model.schema.json',
         namespace: 'trial.example',
         dslVersion: '1.0.0',
         version: '1.0',
@@ -219,8 +255,13 @@ const NPDEV_RESPONSE_SCHEMA_HINT = {
     }
   ],
   qualityGates: {
+    validationMode: 'lightweight-contract-validation',
+    requiredArtifacts: REQUIRED_ARTIFACT_PATHS,
+    recommendedArtifacts: OPTIONAL_ARTIFACT_PATHS,
+    safeBeta0Restrictions: SAFE_BETA0_RESTRICTIONS,
     missingInformation: ['string'],
     riskNotes: ['string'],
+    warnings: ['string'],
     humanReviewChecklist: ['string'],
     beta0ScopeNotes: ['string']
   }
@@ -233,6 +274,114 @@ function setStatus(kind, title, message) {
   if (kind === 'error') dot.classList.add('error');
   $('statusTitle').textContent = title;
   $('statusMessage').textContent = message;
+}
+
+async function fetchJsonContract(path) {
+  const response = await fetch(path, { cache: 'no-store' });
+  if (!response.ok) {
+    throw new Error(`${path} returned HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+async function loadSchemaPack() {
+  renderSchemaPackStatus();
+
+  try {
+    const manifest = await fetchJsonContract(SCHEMA_PACK_PATHS.manifest);
+    const schemas = {};
+
+    const schemaLoads = [
+      ['config.schema.json', SCHEMA_PACK_PATHS.config],
+      ['model.schema.json', SCHEMA_PACK_PATHS.model],
+      ['manifest.schema.json', SCHEMA_PACK_PATHS.manifestSchema],
+      ['artifact-bundle.schema.json', SCHEMA_PACK_PATHS.artifactBundle]
+    ];
+
+    for (const [name, path] of schemaLoads) {
+      const missingByManifest = Array.isArray(manifest.missingSchemas)
+        && manifest.missingSchemas.some((schema) => schema.name === name);
+      if (!missingByManifest) {
+        schemas[name] = await fetchJsonContract(path);
+      }
+    }
+
+    state.schemaPack = { status: 'loaded', manifest, schemas, errors: [] };
+  } catch (error) {
+    state.schemaPack = {
+      status: 'failed',
+      manifest: null,
+      schemas: {},
+      errors: [error.message]
+    };
+  }
+
+  renderSchemaPackStatus();
+}
+
+function schemaPackSummary() {
+  const pack = state.schemaPack;
+  const manifest = pack.manifest || {};
+  const schemaRows = Array.isArray(manifest.schemas) ? manifest.schemas : [];
+  const missingRows = Array.isArray(manifest.missingSchemas) ? manifest.missingSchemas : [];
+
+  return {
+    status: pack.status,
+    validationMode: manifest.validationMode || VALIDATION_MODE,
+    schemaPackVersion: manifest.schemaPackVersion || 'unknown',
+    gitHead: manifest.gitHead || 'unknown',
+    schemas: schemaRows.map((schema) => ({
+      name: schema.name,
+      sha256: schema.sha256,
+      purpose: schema.purpose
+    })),
+    missingSchemas: missingRows.map((schema) => schema.name || schema.expectedSourcePath || 'unknown')
+  };
+}
+
+function renderSchemaPackStatus() {
+  const box = $('schemaPackStatus');
+  if (!box) return;
+
+  const pack = state.schemaPack;
+  if (pack.status === 'loading') {
+    box.className = 'schema-pack-status loading';
+    box.innerHTML = '<strong>Schema pack loading</strong><p>Fetching contracts from the local static site.</p>';
+    return;
+  }
+
+  if (pack.status === 'failed') {
+    box.className = 'schema-pack-status failed';
+    box.innerHTML = `
+      <strong>Schema pack failed</strong>
+      <p>${pack.errors.map(escapeHtml).join('<br>')}</p>
+      <p>Validation remains ${VALIDATION_MODE} and will report that schema metadata is unavailable.</p>
+    `;
+    return;
+  }
+
+  const manifest = pack.manifest || {};
+  const schemas = Array.isArray(manifest.schemas) ? manifest.schemas : [];
+  const missing = Array.isArray(manifest.missingSchemas) ? manifest.missingSchemas : [];
+  const hashRows = schemas
+    .map((schema) => `<li><code>${escapeHtml(schema.name)}</code> <span>${escapeHtml(String(schema.sha256 || '').slice(0, 16))}</span></li>`)
+    .join('');
+  const missingRows = missing.length
+    ? `<p><strong>Missing schemas:</strong> ${missing.map((schema) => `<code>${escapeHtml(schema.name || schema.expectedSourcePath || 'unknown')}</code>`).join(', ')}</p>`
+    : '<p><strong>Missing schemas:</strong> none</p>';
+
+  box.className = 'schema-pack-status loaded';
+  box.innerHTML = `
+    <div class="schema-pack-heading">
+      <strong>Schema pack loaded</strong>
+      <span>${escapeHtml(manifest.schemaPackVersion || 'unknown')}</span>
+    </div>
+    <p><strong>Git head:</strong> <code>${escapeHtml(String(manifest.gitHead || 'unknown').slice(0, 12))}</code></p>
+    <p><strong>Validation mode:</strong> <code>${escapeHtml(manifest.validationMode || VALIDATION_MODE)}</code></p>
+    <p><strong>Copied schemas:</strong> ${schemas.map((schema) => `<code>${escapeHtml(schema.name)}</code>`).join(', ')}</p>
+    ${missingRows}
+    <ul class="schema-hash-list">${hashRows}</ul>
+  `;
 }
 
 function splitCsv(value) {
@@ -286,6 +435,7 @@ function buildNpdevPrompt(input) {
   const scenarioId = input.scenarioId || toKebabCase(projectName);
   const entities = input.entities.length ? input.entities.join(', ') : 'infer 1 to 4 core concepts from objective';
   const constraints = input.constraints || 'Keep Beta0 Path B. Avoid trusted-source execution and unsupported custom procedure code. Prefer model-governed concepts, invariants, flows, capabilities, events, and simple panels only when safe.';
+  const schemaContract = formatSchemaContractForPrompt();
 
   return `You are generating input artifacts for NPDevGenerator, not generic application code.
 
@@ -315,11 +465,21 @@ Project:
 Objective:
 ${input.objective}
 
+NPDev SCHEMA CONTRACT PACK:
+${schemaContract}
+
+SAFE BETA0 DEFAULT RESTRICTIONS:
+${SAFE_BETA0_RESTRICTIONS.map((restriction) => `- ${restriction}`).join('\n')}
+
 CRITICAL FORMAT RULES:
 1. Return JSON only. No markdown fence. No commentary outside JSON.
 2. The outer response must match schemaVersion "npdev-static-generator-artifact-bundle.v2".
 3. artifacts must be an array of objects with path and content.
-4. config.json content must be a JSON object using NPDevGenerator config shape:
+4. config.json must match the loaded NPDev config schema from contracts/config.schema.json.
+5. model.json must match the loaded NPDev model schema from contracts/model.schema.json.
+6. manifest.json must match the loaded NPDev manifest schema from contracts/manifest.schema.json when present.
+7. The outer response must match contracts/artifact-bundle.schema.json.
+8. config.json content must be a JSON object using NPDevGenerator config shape:
    - configVersion: "1.0"
    - scenario.name, scenario.description, scenario.outputRoot
    - generator flags: failIfModelMissing, failIfConfigMissing, cleanOutputBeforeGenerate, emitPluginAssets, emitRuntimeAssets, emitUiAssets
@@ -329,7 +489,7 @@ CRITICAL FORMAT RULES:
    - database.provider, host, port, database, username, password, adminDatabase, resetMode, containerName
    - runtime.springProfile, serverPort, javaArgs, gradleTask
    - trialDefaults
-5. model.json content must be a JSON object using NPDev DSL 1.0.0 shape:
+9. model.json content must be a JSON object using NPDev DSL 1.0.0 shape:
    - dslVersion: "1.0.0"
    - version: "1.0"
    - namespace
@@ -338,17 +498,54 @@ CRITICAL FORMAT RULES:
    - events[] when useful
    - flows[] with steps such as enforceInvariants, capabilityCall, emitEvent, return
    - queries/procedures/panels only if the objective needs them and they stay declarative
-6. manifest.json must include id, title, complexity, mainFlow, purpose, businessStory, features, inputFiles, walkthrough, expectedOutcomes.
-7. expected-behavior.md and expected-endpoints.md must explain what NPDev runtime should expose and how to validate it.
-8. Do not output Java, TypeScript, SQL, Gradle, or Docker files.
-9. Do not invent unsupported custom runtime code.
-10. If something is uncertain, make a conservative assumption and record it in project.assumptions and qualityGates.missingInformation.
-11. Keep the model small. Prefer 1 to 4 concepts and 1 to 3 flows.
-12. Use valid JSON only. JSON.parse must succeed.
+10. manifest.json must include id, title, complexity, mainFlow, purpose, businessStory, features, inputFiles, walkthrough, expectedOutcomes.
+11. expected-behavior.md and expected-endpoints.md must explain what NPDev runtime should expose and how to validate it.
+12. Do not output Java, TypeScript, SQL, Gradle, or Docker files.
+13. Do not invent unsupported custom runtime code.
+14. Keep Safe Beta0 restrictions unless the user explicitly requested a risk and qualityGates.warnings documents it.
+15. Do not invent /api/v1/concepts/... endpoints. Prefer runtime flow and evidence endpoints already used by NPDev Beta0 examples.
+16. If something is uncertain, make a conservative assumption and record it in project.assumptions and qualityGates.missingInformation.
+17. qualityGates.validationMode must be "${VALIDATION_MODE}".
+18. qualityGates.requiredArtifacts must list ${REQUIRED_ARTIFACT_PATHS.join(', ')}.
+19. qualityGates.safeBeta0Restrictions must list the Safe Beta0 restrictions above.
+20. Keep the model small. Prefer 1 to 4 concepts and 1 to 3 flows.
+21. Use valid JSON only. JSON.parse must succeed.
 
 Expected outer JSON shape:
 ${JSON.stringify(NPDEV_RESPONSE_SCHEMA_HINT, null, 2)}
 `;
+}
+
+function formatSchemaContractForPrompt() {
+  const pack = state.schemaPack;
+  if (pack.status !== 'loaded') {
+    return `Schema pack status: ${pack.status}. Use the documented NPDev schema-shaped contract and include qualityGates warnings that browser schema metadata was not loaded.`;
+  }
+
+  const summary = schemaPackSummary();
+  const schemaText = Object.entries(pack.schemas)
+    .map(([name, schema]) => `--- ${name} (${summary.schemas.find((item) => item.name === name)?.sha256 || 'sha256 unknown'}) ---\n${compactSchemaForPrompt(name, schema)}`)
+    .join('\n\n');
+
+  return [
+    `Schema pack version: ${summary.schemaPackVersion}`,
+    `Git head: ${summary.gitHead}`,
+    `Validation mode in this browser: ${summary.validationMode}`,
+    `Copied schemas: ${summary.schemas.map((schema) => `${schema.name} sha256=${schema.sha256}`).join('; ')}`,
+    `Missing schemas: ${summary.missingSchemas.length ? summary.missingSchemas.join(', ') : 'none'}`,
+    'Schema excerpts / compact schemas:',
+    schemaText
+  ].join('\n');
+}
+
+function compactSchemaForPrompt(name, schema) {
+  const compact = JSON.stringify(schema);
+  const limit = SCHEMA_PROMPT_CHAR_LIMITS[name] || 5000;
+  if (compact.length <= limit) return compact;
+
+  const properties = schema && schema.properties ? Object.keys(schema.properties).join(', ') : 'n/a';
+  const definitions = schema && schema.definitions ? Object.keys(schema.definitions).slice(0, 60).join(', ') : 'n/a';
+  return `${compact.slice(0, limit)}\n...[truncated for prompt size: ${compact.length} chars total; top-level properties: ${properties}; definitions: ${definitions}]`;
 }
 
 async function callProvider(input, prompt) {
@@ -374,7 +571,12 @@ async function callCloudflareWorker(input, prompt) {
     body: JSON.stringify({
       model: input.model,
       prompt,
-      schemaHint: JSON.stringify(NPDEV_RESPONSE_SCHEMA_HINT),
+      schemaHint: JSON.stringify({
+        responseShape: NPDEV_RESPONSE_SCHEMA_HINT,
+        schemaPack: schemaPackSummary(),
+        validationMode: VALIDATION_MODE,
+        safeBeta0Restrictions: SAFE_BETA0_RESTRICTIONS
+      }),
       temperature: input.temperature,
       maxOutputTokens: input.maxTokens
     })
@@ -563,8 +765,32 @@ function validateArtifacts(bundle, artifacts) {
   const warnings = [];
   const paths = new Set(artifacts.map((artifact) => artifact.path));
 
+  if (!bundle || typeof bundle !== 'object') {
+    errors.push('Outer response must be a JSON object.');
+  }
+
   if (bundle.schemaVersion !== 'npdev-static-generator-artifact-bundle.v2') {
     warnings.push('Outer schemaVersion is missing or not v2.');
+  }
+
+  if (!bundle.project || typeof bundle.project !== 'object') errors.push('Outer response missing required top-level field: project.');
+  if (!Array.isArray(bundle.artifacts)) errors.push('Outer response missing required top-level field: artifacts[].');
+  if (!bundle.qualityGates || typeof bundle.qualityGates !== 'object') errors.push('Outer response missing required top-level field: qualityGates.');
+
+  if (bundle.qualityGates && typeof bundle.qualityGates === 'object') {
+    if (bundle.qualityGates.validationMode !== VALIDATION_MODE) {
+      warnings.push(`qualityGates.validationMode should be "${VALIDATION_MODE}" for this checkpoint.`);
+    }
+    if (!Array.isArray(bundle.qualityGates.requiredArtifacts)) {
+      warnings.push('qualityGates.requiredArtifacts should list the required artifact paths.');
+    }
+    if (!Array.isArray(bundle.qualityGates.safeBeta0Restrictions)) {
+      warnings.push('qualityGates.safeBeta0Restrictions should list the Safe Beta0 default restrictions.');
+    }
+  }
+
+  if (state.schemaPack.status !== 'loaded') {
+    warnings.push(`Schema pack status is ${state.schemaPack.status}; browser validation is using lightweight contract checks only.`);
   }
 
   for (const required of REQUIRED_ARTIFACT_PATHS) {
@@ -605,7 +831,57 @@ function validateArtifacts(bundle, artifacts) {
     }
   }
 
-  return { errors, warnings, passed: errors.length === 0 };
+  warnings.push(...inspectSafeBeta0Risks(model, artifacts));
+
+  return {
+    errors,
+    warnings: [...new Set(warnings)],
+    passed: errors.length === 0,
+    validationMode: VALIDATION_MODE,
+    schemaPack: schemaPackSummary()
+  };
+}
+
+function inspectSafeBeta0Risks(model, artifacts) {
+  const warnings = new Set();
+
+  if (model && typeof model === 'object') {
+    for (const concept of Array.isArray(model.concepts) ? model.concepts : []) {
+      for (const field of Array.isArray(concept.fields) ? concept.fields : []) {
+        const fieldName = `${concept.name || 'concept'}.${field.name || 'field'}`;
+        if (field.type === 'reference' || field.reference) warnings.add(`Safe Beta0 warning: ${fieldName} uses reference; review before generation.`);
+        if (field.type === 'enum' || Array.isArray(field.enumValues)) warnings.add(`Safe Beta0 warning: ${fieldName} uses enum; review before generation.`);
+        if (field.ui && field.ui.widget === 'search-dialog') warnings.add(`Safe Beta0 warning: ${fieldName} uses search-dialog; review before generation.`);
+      }
+
+      for (const invariant of Array.isArray(concept.invariants) ? concept.invariants : []) {
+        if (typeof invariant.expr === 'string' && /\bnow\s*\(/i.test(invariant.expr)) {
+          warnings.add(`Safe Beta0 warning: invariant ${invariant.name || 'unnamed'} uses now(); review before generation.`);
+        }
+      }
+    }
+
+    for (const flow of Array.isArray(model.flows) ? model.flows : []) {
+      for (const step of Array.isArray(flow.steps) ? flow.steps : []) {
+        const stepName = `${flow.name || 'flow'}.${step.name || step.type || 'step'}`;
+        if (['assign', 'findById', 'findAll', 'delete'].includes(step.type)) {
+          warnings.add(`Safe Beta0 warning: ${stepName} uses ${step.type}; review before generation.`);
+        }
+        if (step.type === 'emitEvent' && step.payload && typeof step.payload === 'object' && !Array.isArray(step.payload)) {
+          warnings.add(`Safe Beta0 warning: ${stepName} uses object-shaped emitEvent.payload; review before generation.`);
+        }
+      }
+    }
+  }
+
+  for (const artifact of artifacts) {
+    const text = artifactContentToString(artifact.content, artifact.path);
+    if (/\/api\/v1\/concepts\//i.test(text)) {
+      warnings.add(`Safe Beta0 warning: ${artifact.path} mentions invented /api/v1/concepts/... endpoints.`);
+    }
+  }
+
+  return [...warnings];
 }
 
 function artifactContentToString(content, path) {
@@ -657,6 +933,17 @@ function renderValidationMessage(validation, artifacts) {
   const parts = [];
   parts.push(`<strong>${validation.passed ? 'Artifact validation passed' : 'Artifact validation failed'}</strong>`);
   parts.push(`${artifacts.length} file(s) generated.`);
+  parts.push(`Validation mode: <code>${escapeHtml(validation.validationMode || VALIDATION_MODE)}</code>.`);
+  if (validation.schemaPack) {
+    const schemaNames = validation.schemaPack.schemas.map((schema) => `${schema.name} ${String(schema.sha256 || '').slice(0, 12)}`).join(', ');
+    parts.push(`Schema pack: <code>${escapeHtml(validation.schemaPack.status)}</code>, git <code>${escapeHtml(String(validation.schemaPack.gitHead || 'unknown').slice(0, 12))}</code>.`);
+    if (schemaNames) {
+      parts.push(`Schema hashes: ${escapeHtml(schemaNames)}.`);
+    }
+    if (validation.schemaPack.missingSchemas.length) {
+      parts.push(`Missing schemas: ${escapeHtml(validation.schemaPack.missingSchemas.join(', '))}.`);
+    }
+  }
   if (validation.errors.length) {
     parts.push('<br><strong>Errors:</strong><ul>' + validation.errors.map((e) => `<li>${escapeHtml(e)}</li>`).join('') + '</ul>');
   }
@@ -701,7 +988,7 @@ function buildMockBundle(input) {
       {
         path: 'config.json',
         content: {
-          $schema: '..\\..\\NPDevContract\\schemas\\config.schema.json',
+          $schema: 'contracts/config.schema.json',
           configVersion: '1.0',
           scenario: {
             name: scenarioId,
@@ -761,7 +1048,7 @@ function buildMockBundle(input) {
       {
         path: 'model.json',
         content: {
-          $schema: '..\\..\\NPDevContract\\schemas\\model.schema.json',
+          $schema: 'contracts/model.schema.json',
           namespace,
           dslVersion: '1.0.0',
           version: '1.0',
@@ -847,11 +1134,17 @@ function buildMockBundle(input) {
       }
     ],
     qualityGates: {
+      validationMode: VALIDATION_MODE,
+      requiredArtifacts: REQUIRED_ARTIFACT_PATHS,
+      recommendedArtifacts: OPTIONAL_ARTIFACT_PATHS,
+      safeBeta0Restrictions: SAFE_BETA0_RESTRICTIONS,
       missingInformation: [],
       riskNotes: ['Mock provider output is illustrative only.'],
+      warnings: [],
       humanReviewChecklist: [
-        'Validate config.json against NPDevContract schemas.',
-        'Validate model.json against NPDevContract schemas.',
+        'Review config.json against contracts/config.schema.json.',
+        'Review model.json against contracts/model.schema.json.',
+        'Review manifest.json against contracts/manifest.schema.json.',
         'Run the relevant NPDev sample/generator validation scripts before accepting the output.'
       ],
       beta0ScopeNotes: ['Trusted-source execution and deep custom procedure implementation remain outside default Beta0 Path B.']
@@ -1082,6 +1375,8 @@ function previewPrompt() {
 }
 
 function init() {
+  loadSchemaPack();
+
   $('generateButton').addEventListener('click', handleGenerate);
   $('previewPromptButton').addEventListener('click', previewPrompt);
   $('clearButton').addEventListener('click', clearOutput);
