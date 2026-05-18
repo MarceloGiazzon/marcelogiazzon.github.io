@@ -200,6 +200,27 @@ input:focus, select:focus, textarea:focus {
   margin-bottom: 14px;
 }
 
+.prompt-diagnostics {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  color: var(--muted);
+  background: rgba(255,255,255,0.03);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.prompt-diagnostics.warning {
+  border-color: rgba(242, 204, 96, 0.55);
+  color: #f9e6a5;
+  background: rgba(242, 204, 96, 0.08);
+}
+
+.prompt-diagnostics span {
+  display: block;
+  margin-top: 4px;
+}
+
 .checkbox-row {
   display: flex;
   gap: 10px;

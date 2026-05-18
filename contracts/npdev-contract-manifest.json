@@ -8,7 +8,7 @@
   "gitHead": "b859ebee46ffa634641051afcc0185620f237348",
   "validationMode": "lightweight-contract-validation",
   "activeBundleSchemaVersion": "npdev-static-generator-artifact-bundle.v4",
-  "siteBuild": "Safe Beta0 Contract Enforcement 002",
+  "siteBuild": "Safe Beta0 Prompt Size Control 003",
   "promptContract": "NPDEV_PRECISE_FORMAT_GUIDE v4",
   "schemaSourcePolicy": "Public schemas copied from NPDevContract/schemas; alternate schema paths were inspected and documented in sourceInspection.",
   "schemas": [

@@ -16,11 +16,13 @@ const state = {
   }
 };
 
-const SITE_BUILD_LABEL = 'Safe Beta0 Contract Enforcement 002';
+const SITE_BUILD_LABEL = 'Safe Beta0 Prompt Size Control 003';
 const CONTRACT_MODE = 'Safe Beta0';
 const PROMPT_CONTRACT_VERSION = 'NPDEV_PRECISE_FORMAT_GUIDE v4';
 const ARTIFACT_BUNDLE_SCHEMA_VERSION = 'npdev-static-generator-artifact-bundle.v4';
 const VALIDATION_MODE = 'lightweight-contract-validation';
+const PROXY_PROMPT_LIMIT_BYTES = 30000;
+const PROXY_REQUEST_WARN_BYTES = 24000;
 
 const SCHEMA_PACK_PATHS = {
   manifest: 'contracts/npdev-contract-manifest.json',
@@ -445,7 +447,8 @@ function getFormValues() {
     model: $('model').value.trim() || 'gemini-2.5-flash',
     endpoint: $('endpoint').value.trim(),
     temperature: Number($('temperature').value || 0.1),
-    maxTokens: Number($('maxTokens').value || 12000)
+    maxTokens: Number($('maxTokens').value || 12000),
+    includeFullSchemas: Boolean($('includeFullSchemas')?.checked)
   };
 }
 
@@ -454,7 +457,7 @@ function buildNpdevPrompt(input) {
   const scenarioId = input.scenarioId || toKebabCase(projectName);
   const entities = input.entities.length ? input.entities.join(', ') : 'infer 1 to 4 core concepts from objective';
   const constraints = input.constraints || 'Keep Beta0 Path B. Avoid trusted-source execution and unsupported custom procedure code. Prefer model-governed concepts, invariants, flows, capabilities, events, and simple panels only when safe.';
-  const schemaContract = formatSchemaContractForPrompt();
+  const schemaContract = formatSchemaContractForPrompt(input.includeFullSchemas);
 
   return `You are generating input artifacts for NPDevGenerator, not generic application code.
 
@@ -563,33 +566,60 @@ CRITICAL FORMAT RULES:
 22. Keep the model small. Prefer 1 to 4 concepts and 1 to 3 flows.
 23. Use valid JSON only. JSON.parse must succeed.
 
-Expected outer JSON shape:
-${JSON.stringify(NPDEV_RESPONSE_SCHEMA_HINT, null, 2)}
+Minimal required artifact bundle shape:
+${buildCompactArtifactShapeGuide()}
 `;
 }
 
-function formatSchemaContractForPrompt() {
+function formatSchemaContractForPrompt(includeFullSchemas = false) {
   const pack = state.schemaPack;
   if (pack.status !== 'loaded') {
     return `Schema pack status: ${pack.status}. Use the documented NPDev schema-shaped contract and include qualityGates warnings that browser schema metadata was not loaded.`;
   }
 
   const summary = schemaPackSummary();
-  const schemaText = Object.entries(pack.schemas)
-    .map(([name, schema]) => `--- ${name} (${summary.schemas.find((item) => item.name === name)?.sha256 || 'sha256 unknown'}) ---\n${compactSchemaForPrompt(name, schema)}`)
-    .join('\n\n');
-
-  return [
+  const schemaLine = summary.schemas
+    .filter((schema) => ['config.schema.json', 'model.schema.json', 'manifest.schema.json', 'artifact-bundle.schema.json'].includes(schema.name))
+    .map((schema) => `${schema.name} sha256=${schema.sha256}`)
+    .join(', ');
+  const lines = [
+    `NPDev schema pack loaded: ${schemaLine}`,
     `Schema pack version: ${summary.schemaPackVersion}`,
     `Git head: ${summary.gitHead}`,
     `Prompt contract: ${summary.promptContract}`,
     `Active bundle schema: ${summary.activeBundleSchemaVersion}`,
     `Validation mode in this browser: ${summary.validationMode}`,
-    `Copied schemas: ${summary.schemas.map((schema) => `${schema.name} sha256=${schema.sha256}`).join('; ')}`,
     `Missing schemas: ${summary.missingSchemas.length ? summary.missingSchemas.join(', ') : 'none'}`,
-    'Schema excerpts / compact schemas:',
-    schemaText
-  ].join('\n');
+    'Allowed Safe Beta0: field types string, uuid, integer, decimal, boolean, date; widgets text, textarea, checkbox, date, email; persistence operation save only; steps enforceInvariants, capabilityCall save, emitEvent with from, return; relationships use uuid ID fields, not reference; status uses string, not enum; endpoints use /api/flows, /api/flows/<FlowName>/execute, /api/audit, /api/correlations/{correlationId}.',
+    'Forbidden Safe Beta0: reference, enum, datetime, search-dialog, now(), assign, findById, findAll, delete, object-shaped emitEvent.payload, CRUD endpoints under /api/v1, /api/clinic, or /api/<concept>.'
+  ];
+
+  if (includeFullSchemas) {
+    const schemaText = Object.entries(pack.schemas)
+      .map(([name, schema]) => `--- ${name} (${summary.schemas.find((item) => item.name === name)?.sha256 || 'sha256 unknown'}) ---\n${compactSchemaForPrompt(name, schema)}`)
+      .join('\n\n');
+    lines.push('DEBUG FULL SCHEMA PROMPT MODE ENABLED. Full schema prompt mode may exceed proxy limits.');
+    lines.push(schemaText);
+  }
+
+  return lines.join('\n');
+}
+
+function buildCompactArtifactShapeGuide() {
+  return `{
+  "schemaVersion": "${ARTIFACT_BUNDLE_SCHEMA_VERSION}",
+  "project": { "name": "...", "scenarioId": "kebab-case", "objective": "...", "assumptions": [], "warnings": [] },
+  "artifacts": [
+    { "path": "config.json", "content": { "$schema": "contracts/config.schema.json", "configVersion": "1.0", "scenario": {}, "generator": {}, "bootstrap": {}, "artifact": {}, "finalExec": {}, "database": {}, "runtime": {} } },
+    { "path": "model.json", "content": { "$schema": "contracts/model.schema.json", "namespace": "trial.example", "dslVersion": "1.0.0", "version": "1.0", "concepts": [{ "name": "Appointment", "fields": [{ "name": "patientId", "type": "uuid", "ui": { "label": "Patient ID", "widget": "text" } }] }], "capabilities": [{ "name": "persistence", "type": "PersistenceCapability", "operations": ["save"] }], "bindings": [], "events": [], "flows": [] } },
+    { "path": "manifest.json", "content": { "id": "kebab-case", "title": "...", "complexity": "simple", "mainFlow": "...", "purpose": "...", "businessStory": "...", "features": [], "inputFiles": ["input/example-request.json"], "walkthrough": [], "expectedOutcomes": [] } },
+    { "path": "expected-behavior.md", "content": "..." },
+    { "path": "expected-endpoints.md", "content": "Only /api/flows, /api/flows/<FlowName>/execute, /api/audit, /api/correlations/{correlationId}." },
+    { "path": "generation-notes.md", "content": "..." },
+    { "path": "input/example-request.json", "content": {} }
+  ],
+  "qualityGates": { "validationMode": "${VALIDATION_MODE}", "requiredArtifacts": ${JSON.stringify(REQUIRED_ARTIFACT_PATHS)}, "recommendedArtifacts": ${JSON.stringify(OPTIONAL_ARTIFACT_PATHS)}, "safeBeta0Restrictions": ${JSON.stringify(SAFE_BETA0_RESTRICTIONS)}, "missingInformation": [], "riskNotes": [] }
+}`;
 }
 
 function compactSchemaForPrompt(name, schema) {
@@ -619,22 +649,14 @@ async function callCloudflareWorker(input, prompt) {
     throw new Error('Cloudflare Worker endpoint is required. Example: https://npdev-ai-proxy.YOUR_ACCOUNT.workers.dev/v1/generate');
   }
 
+  const requestPayload = buildWorkerRequestPayload(input, prompt);
+  const diagnostics = calculateRequestDiagnostics(input, prompt, requestPayload);
+  renderPromptDiagnostics(diagnostics);
+
   const response = await fetch(input.endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: input.model,
-      prompt,
-      schemaHint: JSON.stringify({
-        responseShape: NPDEV_RESPONSE_SCHEMA_HINT,
-        schemaPack: schemaPackSummary(),
-        siteContract: siteContractSummary(),
-        validationMode: VALIDATION_MODE,
-        safeBeta0Restrictions: SAFE_BETA0_RESTRICTIONS
-      }),
-      temperature: input.temperature,
-      maxOutputTokens: input.maxTokens
-    })
+    body: JSON.stringify(requestPayload)
   });
 
   const data = await safeReadJson(response);
@@ -646,6 +668,80 @@ async function callCloudflareWorker(input, prompt) {
   if (typeof data.text === 'string' && data.text.trim()) return data.text;
   if (data.json) return JSON.stringify(data.json, null, 2);
   throw new Error('Worker returned no text or json field.');
+}
+
+function buildWorkerRequestPayload(input, prompt) {
+  return {
+    model: input.model,
+    prompt,
+    schemaHint: JSON.stringify(buildCompactSchemaHint()),
+    temperature: input.temperature,
+    maxOutputTokens: input.maxTokens
+  };
+}
+
+function buildCompactSchemaHint() {
+  const summary = schemaPackSummary();
+  return {
+    contractMode: CONTRACT_MODE,
+    promptContract: PROMPT_CONTRACT_VERSION,
+    schemaVersion: ARTIFACT_BUNDLE_SCHEMA_VERSION,
+    validationMode: VALIDATION_MODE,
+    schemaPack: {
+      status: summary.status,
+      version: summary.schemaPackVersion,
+      gitHead: summary.gitHead,
+      schemas: summary.schemas.map((schema) => ({
+        name: schema.name,
+        sha256: schema.sha256,
+        purpose: schema.purpose
+      })),
+      missingSchemas: summary.missingSchemas
+    },
+    safeBeta0: {
+      allowedFieldTypes: SAFE_BETA0_ALLOWED_FIELD_TYPES,
+      allowedWidgets: SAFE_BETA0_ALLOWED_WIDGETS,
+      allowedPersistenceOperations: SAFE_BETA0_ALLOWED_CAPABILITY_OPS,
+      allowedFlowSteps: SAFE_BETA0_ALLOWED_FLOW_STEPS,
+      forbidden: SAFE_BETA0_RESTRICTIONS,
+      requiredArtifacts: REQUIRED_ARTIFACT_PATHS,
+      recommendedArtifacts: OPTIONAL_ARTIFACT_PATHS
+    }
+  };
+}
+
+function utf8ByteLength(value) {
+  return new TextEncoder().encode(String(value || '')).length;
+}
+
+function calculateRequestDiagnostics(input, prompt, requestPayload = buildWorkerRequestPayload(input, prompt)) {
+  const requestJson = JSON.stringify(requestPayload);
+  return {
+    promptChars: prompt.length,
+    promptBytes: utf8ByteLength(prompt),
+    requestBytes: utf8ByteLength(requestJson),
+    model: input.model,
+    maxOutputTokens: input.maxTokens,
+    includeFullSchemas: Boolean(input.includeFullSchemas),
+    limitBytes: PROXY_PROMPT_LIMIT_BYTES,
+    nearLimit: utf8ByteLength(requestJson) >= PROXY_REQUEST_WARN_BYTES || utf8ByteLength(prompt) >= PROXY_REQUEST_WARN_BYTES
+  };
+}
+
+function renderPromptDiagnostics(diagnostics) {
+  const box = $('promptDiagnostics');
+  if (!box) return;
+  box.className = diagnostics.nearLimit ? 'prompt-diagnostics warning' : 'prompt-diagnostics';
+  box.innerHTML = `
+    <strong>Prompt size:</strong>
+    ${diagnostics.promptChars.toLocaleString()} chars,
+    ${diagnostics.promptBytes.toLocaleString()} prompt bytes,
+    ${diagnostics.requestBytes.toLocaleString()} request JSON bytes.
+    <strong>Model:</strong> ${escapeHtml(diagnostics.model)}.
+    <strong>Max output:</strong> ${Number(diagnostics.maxOutputTokens).toLocaleString()} tokens.
+    ${diagnostics.includeFullSchemas ? '<span>Full schema prompt mode may exceed proxy limits.</span>' : '<span>Compact schema prompt mode active.</span>'}
+    ${diagnostics.nearLimit ? '<span>Request is close to the proxy limit. Reduce prompt detail or keep compact mode enabled.</span>' : ''}
+  `;
 }
 
 async function safeReadJson(response) {
@@ -665,11 +761,16 @@ function formatApiError(prefix, data) {
 function buildProviderError(response, data) {
   const status = data?.status || data?.upstreamStatus || response.status;
   const rawPayload = JSON.stringify(data, null, 2);
+  const promptTooLarge = response.status === 413 || data?.error === 'prompt_too_large';
   const upstreamUnavailable = data?.error === 'upstream_error'
     && (Number(status) === 503 || /UNAVAILABLE|overload|high[- ]?demand/i.test(rawPayload));
-  const message = upstreamUnavailable
-    ? 'Gemini is temporarily unavailable or overloaded. Try again later, reduce max output tokens, or switch model.'
-    : formatApiError('Cloudflare Worker request failed', data);
+  let message = formatApiError('Cloudflare Worker request failed', data);
+  if (promptTooLarge) {
+    message = 'Prompt is too large for the proxy. The site should use compact schema guidance instead of full schemas. Reduce prompt detail or switch to compact mode.';
+  }
+  if (upstreamUnavailable) {
+    message = 'Gemini is temporarily unavailable or overloaded. Try again later, reduce max output tokens, or switch model.';
+  }
   const error = new Error(message);
   error.rawPayload = rawPayload;
   error.isProviderError = true;
@@ -1471,6 +1572,8 @@ function clearOutput() {
   $('artifactList').innerHTML = '';
   $('validationBox').className = 'validation-box';
   $('validationBox').textContent = 'No artifact generated yet.';
+  $('promptDiagnostics').textContent = 'Prompt size has not been calculated yet.';
+  $('promptDiagnostics').className = 'prompt-diagnostics';
   setDownloadButtons({ bundle: false, zip: false });
   setRepairPromptButton(false);
   setStatus('ready', 'Ready', 'Output cleared.');
@@ -1513,6 +1616,7 @@ async function handleGenerate() {
   }
 
   const prompt = buildNpdevPrompt(input);
+  const diagnostics = calculateRequestDiagnostics(input, prompt);
   state.lastPrompt = prompt;
   state.lastBundle = null;
   state.lastFiles = [];
@@ -1524,9 +1628,11 @@ async function handleGenerate() {
   $('validationBox').textContent = 'No artifact generated yet.';
   setDownloadButtons({ bundle: false, zip: false });
   setRepairPromptButton(false);
+  renderPromptDiagnostics(diagnostics);
 
   try {
     console.info('[NPDev] generation contract', siteContractSummary());
+    console.info('[NPDev] prompt request diagnostics', diagnostics);
     setStatus('busy', 'Generating', input.provider === 'mock' ? 'Generating mock artifacts.' : 'Calling Cloudflare Worker proxy.');
     const raw = await callProvider(input, prompt);
     state.lastRaw = raw;
@@ -1561,8 +1667,11 @@ async function handleGenerate() {
 function previewPrompt() {
   const input = getFormValues();
   const prompt = buildNpdevPrompt(input);
+  const diagnostics = calculateRequestDiagnostics(input, prompt);
   state.lastPrompt = prompt;
   $('promptOutput').value = prompt;
+  renderPromptDiagnostics(diagnostics);
+  console.info('[NPDev] prompt request diagnostics', diagnostics);
   setStatus('ready', 'Prompt ready', 'Review or copy the prompt before generation.');
 }
 

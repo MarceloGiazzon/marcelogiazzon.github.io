@@ -5,20 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>NPDev Artifact Generator</title>
   <meta name="description" content="Static GitHub Pages app that generates NPDevGenerator-ready config.json, model.json, manifest.json and evidence files through a Cloudflare Worker AI proxy." />
+  <link rel="icon" href="data:," />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <header class="site-header">
     <div class="container header-grid">
       <div>
-        <p class="eyebrow">NPDev practical generation flow | Safe Beta0 Contract Enforcement 002 | Last updated 2026-05-18 17:16 -03:00</p>
+        <p class="eyebrow">NPDev practical generation flow | Safe Beta0 Prompt Size Control 003 | Last updated 2026-05-18 17:38 -03:00</p>
         <h1>Generate NPDevGenerator-ready artifacts</h1>
         <p class="lead">
           Describe the project objective, call the Cloudflare Worker proxy, review the generated NPDev input files,
           and download a ZIP ready to copy into a sample <code>Input</code> folder.
         </p>
         <div class="contract-version" aria-label="Active site contract">
-          <span>Site build: Safe Beta0 Contract Enforcement 002</span>
+          <span>Site build: Safe Beta0 Prompt Size Control 003</span>
           <span>Site contract mode: Safe Beta0</span>
           <span>Prompt contract: NPDEV_PRECISE_FORMAT_GUIDE v4</span>
           <span>Bundle schema: npdev-static-generator-artifact-bundle.v4</span>
@@ -145,6 +146,13 @@
         <label for="storeEndpoint">Remember Worker endpoint in this browser.</label>
       </div>
 
+      <div class="checkbox-row">
+        <input id="includeFullSchemas" type="checkbox" />
+        <label for="includeFullSchemas">Debug only: include full schema excerpts. Full schema prompt mode may exceed proxy limits.</label>
+      </div>
+
+      <div id="promptDiagnostics" class="prompt-diagnostics" aria-live="polite">Prompt size has not been calculated yet.</div>
+
       <div class="button-row">
         <button type="button" class="primary-button" id="generateButton">Generate artifacts</button>
         <button type="button" class="secondary-button" id="previewPromptButton">Preview prompt</button>
@@ -203,6 +211,6 @@
     </div>
   </footer>
 
-  <script src="app.js?v=safe-beta0-002"></script>
+  <script src="app.js?v=safe-beta0-003"></script>
 </body>
 </html>
