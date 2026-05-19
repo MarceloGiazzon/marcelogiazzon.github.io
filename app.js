@@ -16,7 +16,7 @@ const state = {
   }
 };
 
-const SITE_BUILD_LABEL = 'Safe Beta0 Final Prompt Corrections 004D';
+const SITE_BUILD_LABEL = 'Web Download Filename 001';
 const CONTRACT_MODE = 'Safe Beta0';
 const PROMPT_CONTRACT_VERSION = 'NPDEV_PRECISE_FORMAT_GUIDE v4';
 const ARTIFACT_BUNDLE_SCHEMA_VERSION = 'npdev-static-generator-artifact-bundle.v4';

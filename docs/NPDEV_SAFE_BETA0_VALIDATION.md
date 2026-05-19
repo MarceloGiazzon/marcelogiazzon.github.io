@@ -10,13 +10,13 @@ Local NPDev schema validation and generator validation remain the final authorit
 
 ## Active Contract
 
-- Site build: `Safe Beta0 Final Prompt Corrections 004D`
+- Site build: `Web Download Filename 001`
 - Site contract mode: `Safe Beta0`
 - Prompt contract: `NPDEV_PRECISE_FORMAT_GUIDE v4`
 - Bundle schema: `npdev-static-generator-artifact-bundle.v4`
 - Validation mode: `lightweight-contract-validation`
 
-Use `?v=safe-beta0-004d` or a hard browser refresh when testing deployed Pages output to avoid stale cached JavaScript.
+Use `?v=download-filename-001` or a hard browser refresh when testing deployed Pages output to avoid stale cached JavaScript.
 
 Checkpoint 003 uses compact schema guidance by default. The browser still loads schema metadata from `contracts/`, but normal Gemini requests include only schema names, hashes, Safe Beta0 rules, and a minimal artifact shape. The debug-only full schema prompt mode is off by default because it can exceed proxy limits.
 
@@ -136,7 +136,7 @@ The static artifact bundle manifest currently uses `id`, `title`, `complexity`, 
 
 1. Serve the static site from the detected static site root.
 2. Open `http://localhost:8088`.
-3. Confirm the visible build label says `Safe Beta0 Final Prompt Corrections 004D`.
+3. Confirm the visible build label says `Web Download Filename 001`.
 4. Use Mock provider and generate artifacts.
 5. Confirm the validation box says `Safe Beta0 validation: PASSED`.
 6. Preview the prompt and confirm it says `npdev-static-generator-artifact-bundle.v4`, `SAFE BETA0 HARD RULES`, forbidden advanced features, and safe fallbacks.
