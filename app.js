@@ -17,6 +17,7 @@ const state = {
 };
 
 const SITE_BUILD_LABEL = 'Web Endpoint Literal False Positive Fix 002';
+const APP_JS_VERSION_MARK = 'app.js Web Endpoint Literal False Positive Fix 002 2026-05-19';
 const CONTRACT_MODE = 'Safe Beta0';
 const PROMPT_CONTRACT_VERSION = 'NPDEV_PRECISE_FORMAT_GUIDE v4';
 const ARTIFACT_BUNDLE_SCHEMA_VERSION = 'npdev-static-generator-artifact-bundle.v4';
@@ -2105,6 +2106,7 @@ function previewPrompt() {
 }
 
 function init() {
+  console.info('[NPDev] app.js loaded', { appJsVersion: APP_JS_VERSION_MARK, ...siteContractSummary() });
   loadSchemaPack();
 
   $('generateButton').addEventListener('click', handleGenerate);
@@ -2128,4 +2130,5 @@ function init() {
 }
 
 document.addEventListener('DOMContentLoaded', init);
+
 
