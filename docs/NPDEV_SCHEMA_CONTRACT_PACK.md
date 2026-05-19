@@ -5,6 +5,7 @@ Web Checkpoint 003 keeps the browser schema pack loaded for metadata and validat
 Web Checkpoint 003B raises the Worker request-body hard limit to 128 KB while keeping compact prompt mode as the default.
 Web Checkpoint 004 adds lightweight NPDev schema shape checks for config paths, flow property names, invariant expressions, bindings, and manifest handoff shape.
 Web Checkpoint 004B fixes capability validation precision so `eventBus.emitEvent` is allowed while persistence remains `save`-only.
+Web Checkpoint 004D tightens the prompt and repair guidance for the final near-valid failures: API key placeholders and date function calls in invariants.
 
 ## Detected Paths
 
@@ -62,3 +63,5 @@ The active outer bundle schema is now `npdev-static-generator-artifact-bundle.v4
 Checkpoint 004 also rejects artifacts that look conservative but use the wrong shape, such as `flow.concept`, field-map `flow.input`, `step.capability`, `step.operation`, `step.map`, `invariant.expression`, JavaScript-like invariant expressions, empty persistence bindings, website-local config paths, or sample-style manifest keys such as `sampleId`, `category`, and `primaryFlows`.
 
 Checkpoint 004B keeps object-shaped `emitEvent.payload` as a hard failure, but no longer rejects an `EventBusCapability` merely because it declares `operations: ["emitEvent"]`. The prompt now asks for canonical event steps with `event: "EventName"` and `from: "$saved"`, and for the current static artifact manifest shape rather than sample-manifest keys.
+
+Checkpoint 004D requires `config.json` `trialDefaults.apiKey` to be exactly `dev-key` and rejects placeholders, empty values, and real secrets in that field. It also rejects invariant function calls such as `date('today')`, `today()`, `now()`, `includes()`, and `regex()`. Appointment future-date validation should be documented in `generation-notes.md` and `qualityGates.riskNotes`, not enforced in `model.json`.

@@ -16,7 +16,7 @@ const state = {
   }
 };
 
-const SITE_BUILD_LABEL = 'Safe Beta0 Validation Precision 004B';
+const SITE_BUILD_LABEL = 'Safe Beta0 Final Prompt Corrections 004D';
 const CONTRACT_MODE = 'Safe Beta0';
 const PROMPT_CONTRACT_VERSION = 'NPDEV_PRECISE_FORMAT_GUIDE v4';
 const ARTIFACT_BUNDLE_SCHEMA_VERSION = 'npdev-static-generator-artifact-bundle.v4';
@@ -511,7 +511,7 @@ Forbidden in Safe Beta0:
 - type "enum"
 - type "datetime"
 - widget "search-dialog"
-- invariant functions like now()
+- invariant functions like date('today'), today(), now(), includes(), regex(), or any function call
 - step type "assign"
 - persistence operations "findById", "findAll", "delete"
 - object-shaped emitEvent.payload
@@ -524,6 +524,7 @@ Use these safe fallbacks:
 - retrieval: do not promise findAll endpoints
 - updates: full-object save only if supported, otherwise document as future
 - endpoints: use /api/flows and /api/flows/<FlowName>/execute
+- appointment date validation: use AppointmentDateRequired with expr "appointmentDate != null"; document future-date validation as a Safe Beta0 limitation
 
 If the user objective asks for advanced features, do not generate them in Safe Beta0.
 Use safe fallback fields and record the limitation in generation-notes.md and qualityGates.riskNotes.
@@ -569,6 +570,18 @@ Manifest shape rules:
 - Use id, title, complexity, mainFlow, purpose, businessStory, features, inputFiles, walkthrough, expectedOutcomes.
 - Do not use sampleId, sampleName, category, primaryFlows, ownedConcepts, or verificationTargets.
 
+API key and secret rules:
+- config.json trialDefaults.apiKey must be exactly "dev-key".
+- Never use YOUR_API_KEY, YOUR_API_KEY_HERE, placeholder, real keys, or empty strings.
+- Do not generate real secrets anywhere in config.json or generated artifacts.
+
+Date invariant rules:
+- Safe Beta0 invariant expressions must not use functions.
+- Do not use date('today'), today(), now(), includes(), regex(), or any function call.
+- For appointment date, use only AppointmentDateRequired with expr "appointmentDate != null".
+- Do not enforce future-date in model.json.
+- Document future-date validation as a known Safe Beta0 limitation in generation-notes.md and qualityGates.riskNotes.
+
 Config path rules:
 - Use NPDevGenerator relative paths like "..\\Output", "..\\..\\NPDevRuntimeHost", "..\\Output\\ArtifactNP", and "..\\Output\\App".
 - Do not use website-local paths like "contracts/config.schema.json", "output/<scenario>", "bootstrap", "artifacts", or "final-exec".
@@ -592,7 +605,7 @@ CRITICAL FORMAT RULES:
    - finalExec.root, deleteBeforeMount
    - database.provider, host, port, database, username, password, adminDatabase, resetMode, containerName
    - runtime.springProfile, serverPort, javaArgs, gradleTask
-   - trialDefaults
+   - trialDefaults.apiKey: "dev-key"
 9. model.json content must be a JSON object using NPDev DSL 1.0.0 shape:
    - dslVersion: "1.0.0"
    - version: "1.0"
@@ -619,6 +632,8 @@ CRITICAL FORMAT RULES:
 24. If persistence is used, model.bindings must include { "capability": "persistence", "adapter": "repository" }.
 25. If events or emitEvent steps are used, model.bindings must include { "capability": "eventBus", "adapter": "inproc" }.
 26. EventBusCapability may use operations ["emitEvent"], but persistence must use operations ["save"] only.
+27. config.json trialDefaults.apiKey must be "dev-key". Do not generate real secrets anywhere.
+28. Use AppointmentDateRequired with expr "appointmentDate != null"; move future-date validation to generation-notes.md and qualityGates.riskNotes.
 
 Minimal required artifact bundle shape:
 ${buildCompactArtifactShapeGuide()}
@@ -645,10 +660,12 @@ function formatSchemaContractForPrompt(includeFullSchemas = false) {
     `Validation mode in this browser: ${summary.validationMode}`,
     `Missing schemas: ${summary.missingSchemas.length ? summary.missingSchemas.join(', ') : 'none'}`,
     'Allowed Safe Beta0: field types string, uuid, integer, decimal, boolean, date; widgets text, textarea, checkbox, date, email; persistence operation save only; steps enforceInvariants, capabilityCall save, emitEvent with from, return; relationships use uuid ID fields, not reference; status uses string, not enum; endpoints use /api/flows, /api/flows/<FlowName>/execute, /api/audit, /api/correlations/{correlationId}.',
-    'Forbidden Safe Beta0: reference, enum, datetime, search-dialog, now(), assign, findById, findAll, delete, object-shaped emitEvent.payload, CRUD endpoints under /api/v1, /api/clinic, or /api/<concept>.',
+    "Forbidden Safe Beta0: reference, enum, datetime, search-dialog, date('today'), today(), now(), includes(), regex(), any invariant function call, assign, findById, findAll, delete, object-shaped emitEvent.payload, CRUD endpoints under /api/v1, /api/clinic, or /api/<concept>.",
     'Required NPDev DSL shape: flow.input.concept, flow.input.mode, step.cap, step.op, step.args, step.out, return.value, enforceInvariants.scope, enforceInvariants.invariants, invariant.expr.',
     'Required emitEvent shape: { name, type: "emitEvent", event: "EventName", from: "$saved" }. Do not use payload, map, from: "EventName", or object-shaped payloads.',
     'Required manifest shape: id, title, complexity, mainFlow, purpose, businessStory, features, inputFiles, walkthrough, expectedOutcomes. Do not use sampleId, sampleName, category, primaryFlows, ownedConcepts, or verificationTargets.',
+    'Required API key placeholder: config.json trialDefaults.apiKey must be exactly "dev-key"; do not use YOUR_API_KEY, YOUR_API_KEY_HERE, placeholder, real keys, or empty strings; do not generate real secrets.',
+    'Appointment date invariant: use AppointmentDateRequired with expr "appointmentDate != null"; do not enforce future-date in model.json; document future-date validation as a Safe Beta0 limitation in generation-notes.md and qualityGates.riskNotes.',
     'Forbidden invented shape: flow.concept, field-map input objects, step.capability, step.operation, step.map, invariant.expression, JavaScript expressions such as .includes(), array literals, or function calls.',
     'Required config style: NPDevGenerator relative paths such as ..\\Output, ..\\..\\NPDevRuntimeHost, ..\\Output\\ArtifactNP, and ..\\Output\\App; no website-local contracts/config.schema.json, output/<scenario>, bootstrap, artifacts, or final-exec paths.'
   ];
@@ -669,7 +686,7 @@ function buildCompactArtifactShapeGuide() {
   "schemaVersion": "${ARTIFACT_BUNDLE_SCHEMA_VERSION}",
   "project": { "name": "...", "scenarioId": "kebab-case", "objective": "...", "assumptions": [], "warnings": [] },
   "artifacts": [
-    { "path": "config.json", "content": { "$schema": "..\\\\..\\\\NPDevContract\\\\schemas\\\\config.schema.json", "configVersion": "1.0", "scenario": { "name": "kebab-case", "outputRoot": "..\\\\Output" }, "generator": {}, "bootstrap": { "root": "..\\\\..\\\\NPDevRuntimeHost", "mergeStrategy": "clean-copy" }, "artifact": { "root": "..\\\\Output\\\\ArtifactNP", "generatedFolderName": "npdev-generated", "libsFolderName": "libs", "metaFolderName": "npdev-meta" }, "finalExec": { "root": "..\\\\Output\\\\App" }, "database": {}, "runtime": { "springProfile": "dev,step0,trial" } } },
+    { "path": "config.json", "content": { "$schema": "..\\\\..\\\\NPDevContract\\\\schemas\\\\config.schema.json", "configVersion": "1.0", "scenario": { "name": "kebab-case", "outputRoot": "..\\\\Output" }, "generator": {}, "bootstrap": { "root": "..\\\\..\\\\NPDevRuntimeHost", "mergeStrategy": "clean-copy" }, "artifact": { "root": "..\\\\Output\\\\ArtifactNP", "generatedFolderName": "npdev-generated", "libsFolderName": "libs", "metaFolderName": "npdev-meta" }, "finalExec": { "root": "..\\\\Output\\\\App" }, "database": {}, "runtime": { "springProfile": "dev,step0,trial" }, "trialDefaults": { "apiKey": "dev-key" } } },
     { "path": "model.json", "content": { "$schema": "contracts/model.schema.json", "namespace": "trial.example", "dslVersion": "1.0.0", "version": "1.0", "concepts": [{ "name": "Appointment", "fields": [{ "name": "patientId", "type": "uuid", "ui": { "label": "Patient ID", "widget": "text" } }], "invariants": [{ "name": "AppointmentPatientRequired", "expr": "patientId != null && patientId != ''" }] }], "capabilities": [{ "name": "persistence", "type": "PersistenceCapability", "operations": ["save"] }], "bindings": [{ "capability": "persistence", "adapter": "repository" }, { "capability": "eventBus", "adapter": "inproc" }], "events": [], "flows": [{ "name": "ScheduleAppointment", "input": { "concept": "Appointment", "mode": "create" }, "steps": [{ "name": "validate-input", "type": "enforceInvariants", "scope": "Appointment", "invariants": ["AppointmentPatientRequired"] }, { "name": "save-record", "type": "capabilityCall", "cap": "persistence", "op": "save", "args": ["$input"], "out": "$saved" }, { "name": "return-record", "type": "return", "value": "$saved" }] }] } },
     { "path": "manifest.json", "content": { "id": "kebab-case", "title": "...", "complexity": "simple", "mainFlow": "...", "purpose": "...", "businessStory": "...", "features": [], "inputFiles": ["input/example-request.json"], "walkthrough": [], "expectedOutcomes": [] } },
     { "path": "expected-behavior.md", "content": "..." },
@@ -1246,8 +1263,8 @@ function inspectConfigShape(config) {
   if (finalExecRoot === 'final-exec') {
     errors.push('config.json finalExec.root must not be just final-exec. Use an NPDev output path such as ..\\Output\\App.');
   }
-  if (apiKey === 'YOUR_API_KEY_HERE') {
-    errors.push('config.json trialDefaults.apiKey must not be YOUR_API_KEY_HERE. Use a local development placeholder such as dev-key, never a real secret.');
+  if (apiKey !== 'dev-key') {
+    errors.push('config.json trialDefaults.apiKey must be "dev-key". Do not use YOUR_API_KEY, YOUR_API_KEY_HERE, placeholder, real keys, or empty strings.');
   }
   if (springProfile === 'default') {
     errors.push('config.json runtime.springProfile must not be only default. Safe Beta0 expects dev,step0,trial unless explicitly justified.');
@@ -1372,8 +1389,9 @@ function inspectInvariantExpression(expr, invariantName) {
   if (/\[[^\]]*\]/.test(expr)) {
     errors.push(`Safe Beta0 schema shape violation: ${invariantName} uses an array literal. Use simple comparisons in invariant.expr.`);
   }
-  if (/\b[A-Za-z_]\w*\s*\(/.test(expr)) {
-    errors.push(`Safe Beta0 schema shape violation: ${invariantName} uses a function call. Use simple comparisons in invariant.expr.`);
+  const functionMatch = expr.match(/\b([A-Za-z_]\w*)\s*\(/);
+  if (functionMatch) {
+    errors.push(`Safe Beta0 schema shape violation: ${invariantName} uses function call ${functionMatch[1]}(...). Use simple comparisons in invariant.expr.`);
   }
   if (/(^|[^=!])={3}|!==|=>|;|\b(const|let|var|return)\b/.test(expr)) {
     errors.push(`Safe Beta0 schema shape violation: ${invariantName} uses JavaScript syntax. Use simple NPDev expression strings.`);
@@ -1855,6 +1873,8 @@ Rules:
 - Remove findById/findAll/delete.
 - Replace CRUD endpoints with /api/flows endpoints.
 - Ensure every manifest inputFiles entry exists in artifacts[].
+- Replace trialDefaults.apiKey with "dev-key". Do not use real secrets.
+- Remove function calls from invariant.expr, including date('today'), today(), now(), includes(), and regex().
 - Use NPDevGenerator config paths such as ..\\Output, ..\\..\\NPDevRuntimeHost, ..\\Output\\ArtifactNP, and ..\\Output\\App.
 - Use flow.input.concept, flow.input.mode, step.cap, step.op, step.args, step.out, enforceInvariants.scope, invariant.expr, and return.value.
 - Do not use flow.concept, field-map input objects, step.capability, step.operation, step.map, invariant.expression, JavaScript expressions, or empty bindings when persistence is used.
@@ -1873,6 +1893,12 @@ function buildTargetedRepairGuidance(errors) {
   }
   if (/emitEvent\.payload|object-shaped/i.test(text)) {
     guidance.push(`\nEvent repair:\n- Replace object-shaped emitEvent payload steps like { "type": "emitEvent", "from": "AppointmentScheduledEvent", "payload": { ... } } with { "name": "emit-event", "type": "emitEvent", "event": "AppointmentScheduledEvent", "from": "$savedAppointment" }.\n- Do not use payload, map, or from: "EventName" on emitEvent steps.`);
+  }
+  if (/trialDefaults\.apiKey|YOUR_API_KEY|placeholder|empty strings/i.test(text)) {
+    guidance.push(`\nAPI key repair:\n- Replace trialDefaults.apiKey with "dev-key".\n- Do not use real secrets.`);
+  }
+  if (/function call|date\(|today\(|now\(|includes\(|regex\(|AppointmentDateFuture/i.test(text)) {
+    guidance.push(`\nDate invariant repair:\n- Remove AppointmentDateFuture or replace it with AppointmentDateRequired: appointmentDate != null.\n- Move future-date validation to generation-notes.md as a limitation.\n- Add the limitation to qualityGates.riskNotes.`);
   }
   return guidance.join('\n');
 }

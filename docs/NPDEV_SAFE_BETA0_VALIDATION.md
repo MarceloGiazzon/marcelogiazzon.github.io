@@ -10,13 +10,13 @@ Local NPDev schema validation and generator validation remain the final authorit
 
 ## Active Contract
 
-- Site build: `Safe Beta0 Validation Precision 004B`
+- Site build: `Safe Beta0 Final Prompt Corrections 004D`
 - Site contract mode: `Safe Beta0`
 - Prompt contract: `NPDEV_PRECISE_FORMAT_GUIDE v4`
 - Bundle schema: `npdev-static-generator-artifact-bundle.v4`
 - Validation mode: `lightweight-contract-validation`
 
-Use `?v=safe-beta0-004b` or a hard browser refresh when testing deployed Pages output to avoid stale cached JavaScript.
+Use `?v=safe-beta0-004d` or a hard browser refresh when testing deployed Pages output to avoid stale cached JavaScript.
 
 Checkpoint 003 uses compact schema guidance by default. The browser still loads schema metadata from `contracts/`, but normal Gemini requests include only schema names, hashes, Safe Beta0 rules, and a minimal artifact shape. The debug-only full schema prompt mode is off by default because it can exceed proxy limits.
 
@@ -25,6 +25,8 @@ Checkpoint 003B calibrates the proxy limit separately from Gemini context size. 
 Checkpoint 004 adds NPDev schema shape validation. Artifacts now fail when they avoid forbidden Safe Beta0 features but still invent site-local config paths, wrong flow property names, JavaScript-like invariant expressions, empty persistence bindings, or sample-style manifest keys that do not match this static artifact bundle handoff contract.
 
 Checkpoint 004B narrows capability validation so `eventBus.operations: ["emitEvent"]` is allowed. The `save`-only operation rule applies to the `persistence` capability. Object-shaped `emitEvent.payload` remains a hard failure.
+
+Checkpoint 004D makes the final prompt corrections for near-valid Safe Beta0 output: `trialDefaults.apiKey` must be exactly `dev-key`, real secrets are forbidden, and appointment future-date checks must be documented as limitations instead of implemented with function calls in `model.json`.
 
 ## Allowed Safe Beta0 Features
 
@@ -44,6 +46,7 @@ Checkpoint 004B narrows capability validation so `eventBus.operations: ["emitEve
 - `field.type = datetime`
 - `field.ui.widget = search-dialog`
 - invariant expressions containing `now(`
+- invariant expressions containing functions such as `date(`, `today(`, `now(`, `includes(`, or `regex(`
 - flow step type `assign`
 - capability operations `findById`, `findAll`, `delete`
 - flow step operations `findById`, `findAll`, `delete`
@@ -80,6 +83,8 @@ The browser expects NPDevGenerator-oriented config paths:
 
 The browser rejects website-local paths such as `contracts/config.schema.json`, `output/<scenario>`, `bootstrap`, `artifacts`, and `final-exec`.
 
+`config.json` must include `trialDefaults.apiKey: "dev-key"`. The browser rejects `YOUR_API_KEY`, `YOUR_API_KEY_HERE`, `placeholder`, empty strings, and any other value for this field. Generated artifacts must not contain real secrets.
+
 Safe Beta0 flows must use:
 
 - `flow.input.concept`
@@ -94,6 +99,8 @@ Safe Beta0 flows must use:
 - `invariant.expr`
 
 The browser rejects `flow.concept`, field-map `input` objects, `step.capability`, `step.operation`, `step.map`, `invariant.expression`, JavaScript expressions such as `.includes()`, array literals, and function calls.
+
+For appointment dates, use `AppointmentDateRequired` with `expr: "appointmentDate != null"`. Do not enforce future-date logic in `model.json`; document it in `generation-notes.md` and `qualityGates.riskNotes` as a Safe Beta0 limitation.
 
 Safe Beta0 event emission must use:
 
@@ -116,7 +123,7 @@ The static artifact bundle manifest currently uses `id`, `title`, `complexity`, 
 
 1. Serve the static site from the detected static site root.
 2. Open `http://localhost:8088`.
-3. Confirm the visible build label says `Safe Beta0 Validation Precision 004B`.
+3. Confirm the visible build label says `Safe Beta0 Final Prompt Corrections 004D`.
 4. Use Mock provider and generate artifacts.
 5. Confirm the validation box says `Safe Beta0 validation: PASSED`.
 6. Preview the prompt and confirm it says `npdev-static-generator-artifact-bundle.v4`, `SAFE BETA0 HARD RULES`, forbidden advanced features, and safe fallbacks.
@@ -126,12 +133,15 @@ The static artifact bundle manifest currently uses `id`, `title`, `complexity`, 
 10. Confirm validation fails and errors mention wrong config paths, wrong flow shape, JavaScript-like invariants, empty bindings, and manifest shape mismatch.
 11. Load `tests/fixtures/schema-shape-invalid-manifest-and-event-payload.json` through the validation path.
 12. Confirm validation fails for missing manifest keys, sample-manifest keys, and object-shaped `emitEvent.payload`, but does not report `eventBus includes emitEvent`.
+13. Load `tests/fixtures/near-valid-api-key-and-date-function.json` through the validation path.
+14. Confirm validation fails only for `trialDefaults.apiKey` and the `AppointmentDateFuture` function call.
 
 If the Worker returns `upstream_error` with status `503` or Gemini `UNAVAILABLE`, the site shows: `Gemini is temporarily unavailable or overloaded. Try again later, reduce max output tokens, or switch model.` The raw error JSON remains visible in the raw/debug panel and is not parsed as an artifact bundle.
 
 The unsafe fixture is expected to fail Safe Beta0 validation.
 The schema-shape fixture is also expected to fail Safe Beta0 validation.
 The manifest/event-payload fixture is expected to fail Safe Beta0 validation for the precise reasons documented above.
+The near-valid API key/date fixture is expected to fail Safe Beta0 validation for exactly those two issues.
 
 ## Repair Prompt
 
