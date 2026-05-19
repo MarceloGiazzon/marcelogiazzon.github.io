@@ -71,6 +71,19 @@ Checkpoint 004D makes the final prompt corrections for near-valid Safe Beta0 out
 
 Every path listed in `manifest.json` `inputFiles` must also exist in `artifacts[]`. For example, `input/example-request.json` is valid only when the artifact bundle includes an artifact with that exact path.
 
+## Download Filenames
+
+Generated bundle downloads use the same base filename for JSON and ZIP:
+
+`npdev-artifact-bundle_Gemini-Flash_ProjectName_dd-MM-yyyy`
+
+For example:
+
+- `npdev-artifact-bundle_Gemini-Flash_Clinic-Appointment-Manager_18-05-2026.json`
+- `npdev-artifact-bundle_Gemini-Flash_Clinic-Appointment-Manager_18-05-2026.zip`
+
+The project segment comes from `bundle.project.name` when present, then `bundle.project.scenarioId`. Filename segments replace spaces with `-`, remove invalid filename characters, collapse repeated `-`, and trim leading/trailing `-`.
+
 ## Schema Shape Rules
 
 The browser expects NPDevGenerator-oriented config paths:

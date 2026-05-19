@@ -1482,6 +1482,7 @@ function renderArtifacts(artifacts, validation) {
   }
 
   setDownloadButtons({ bundle: true, zip: validation.passed });
+  updateDownloadFilenamePreview(validation.passed);
   setRepairPromptButton(!validation.passed);
 }
 
@@ -1525,6 +1526,21 @@ function setDownloadButtons(options) {
   const stateOptions = typeof options === 'boolean' ? { bundle: options, zip: options } : options;
   $('downloadZipButton').disabled = !stateOptions.zip;
   $('downloadBundleButton').disabled = !stateOptions.bundle;
+}
+
+function updateDownloadFilenamePreview(zipEnabled = false) {
+  const box = $('downloadFilenamePreview');
+  if (!box) return;
+  if (!state.lastBundle) {
+    box.textContent = 'Download filename will appear after generation.';
+    return;
+  }
+
+  const baseName = buildArtifactDownloadBaseName(state.lastBundle, getCurrentProviderDownloadLabel());
+  const jsonName = `${baseName}.json`;
+  const zipName = `${baseName}.zip`;
+  const zipText = zipEnabled ? zipName : `${zipName} (disabled until validation passes)`;
+  box.innerHTML = `<strong>Download filenames:</strong> JSON <code>${escapeHtml(jsonName)}</code> | ZIP <code>${escapeHtml(zipText)}</code>`;
 }
 
 function setRepairPromptButton(enabled) {
@@ -1739,7 +1755,8 @@ function guessMimeType(filename) {
 
 function downloadBundleJson() {
   if (!state.lastBundle) return;
-  downloadTextFile('npdev-artifact-bundle.json', JSON.stringify(state.lastBundle, null, 2) + '\n');
+  const filename = `${buildArtifactDownloadBaseName(state.lastBundle, getCurrentProviderDownloadLabel())}.json`;
+  downloadTextFile(filename, JSON.stringify(state.lastBundle, null, 2) + '\n');
 }
 
 function downloadZip() {
@@ -1752,11 +1769,42 @@ function downloadZip() {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `${toKebabCase($('scenarioId').value || $('projectName').value || 'npdev-artifacts')}-input.zip`;
+  link.download = `${buildArtifactDownloadBaseName(state.lastBundle, getCurrentProviderDownloadLabel())}.zip`;
   document.body.appendChild(link);
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+function buildArtifactDownloadBaseName(bundle, providerLabel = 'Gemini-Flash') {
+  const projectValue = bundle?.project?.name || bundle?.project?.scenarioId || 'NPDev-Artifacts';
+  const safeProvider = sanitizeFilenameSegment(providerLabel || 'Gemini-Flash') || 'Gemini-Flash';
+  const safeProject = sanitizeFilenameSegment(projectValue) || 'NPDev-Artifacts';
+  return `npdev-artifact-bundle_${safeProvider}_${safeProject}_${formatDownloadDate(new Date())}`;
+}
+
+function getCurrentProviderDownloadLabel() {
+  const model = String($('model')?.value || '').trim();
+  if (/gemini/i.test(model) && /flash/i.test(model)) return 'Gemini-Flash';
+  if (/flash/i.test(model)) return 'Gemini-Flash';
+  if ($('provider')?.value === 'mock') return 'Mock';
+  return sanitizeFilenameSegment(model) || 'Gemini-Flash';
+}
+
+function sanitizeFilenameSegment(value) {
+  return String(value || '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[<>:"/\\|?*\x00-\x1f]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function formatDownloadDate(date) {
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = String(date.getFullYear());
+  return `${day}-${month}-${year}`;
 }
 
 function createZipBlob(files) {
@@ -1920,6 +1968,7 @@ function clearOutput() {
   $('validationBox').textContent = 'No artifact generated yet.';
   $('promptDiagnostics').textContent = 'Prompt size has not been calculated yet.';
   $('promptDiagnostics').className = 'prompt-diagnostics';
+  updateDownloadFilenamePreview(false);
   setDownloadButtons({ bundle: false, zip: false });
   setRepairPromptButton(false);
   setStatus('ready', 'Ready', 'Output cleared.');
@@ -1972,6 +2021,7 @@ async function handleGenerate() {
   $('artifactList').innerHTML = '';
   $('validationBox').className = 'validation-box';
   $('validationBox').textContent = 'No artifact generated yet.';
+  updateDownloadFilenamePreview(false);
   setDownloadButtons({ bundle: false, zip: false });
   setRepairPromptButton(false);
   renderPromptDiagnostics(diagnostics);
