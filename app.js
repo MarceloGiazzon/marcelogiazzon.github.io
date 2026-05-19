@@ -16,7 +16,7 @@ const state = {
   }
 };
 
-const SITE_BUILD_LABEL = 'Web Manifest Alignment 001';
+const SITE_BUILD_LABEL = 'Web Endpoint Literal False Positive Fix 002';
 const CONTRACT_MODE = 'Safe Beta0';
 const PROMPT_CONTRACT_VERSION = 'NPDEV_PRECISE_FORMAT_GUIDE v4';
 const ARTIFACT_BUNDLE_SCHEMA_VERSION = 'npdev-static-generator-artifact-bundle.v4';
@@ -54,7 +54,7 @@ const SAFE_BETA0_RESTRICTIONS = [
   'no findAll operations or steps',
   'no delete operations or steps',
   'no object-shaped emitEvent.payload',
-  'no CRUD endpoints under /api/v1'
+  'no concept-specific CRUD endpoints'
 ];
 
 const SAFE_BETA0_ALLOWED_FIELD_TYPES = ['string', 'uuid', 'integer', 'decimal', 'boolean', 'date'];
@@ -522,7 +522,7 @@ Forbidden in Safe Beta0:
 - step type "assign"
 - persistence operations "findById", "findAll", "delete"
 - object-shaped emitEvent.payload
-- CRUD endpoints under /api/v1
+- concept-specific CRUD endpoints
 
 Use these safe fallbacks:
 - relationships: uuid fields such as patientId, doctorId
@@ -632,7 +632,7 @@ CRITICAL FORMAT RULES:
 12. Do not output Java, TypeScript, SQL, Gradle, or Docker files.
 13. Do not invent unsupported custom runtime code.
 14. Keep Safe Beta0 restrictions. Advanced mode is not active in this site.
-15. Do not invent CRUD endpoints under /api/v1. Prefer runtime flow and evidence endpoints already used by NPDev Beta0 examples.
+15. Do not invent concept-specific CRUD endpoints. Prefer runtime flow and evidence endpoints already used by NPDev Beta0 examples.
 16. If something is uncertain, make a conservative assumption and record it in project.assumptions and qualityGates.missingInformation.
 17. qualityGates.validationMode must be "${VALIDATION_MODE}".
 18. qualityGates.requiredArtifacts must list ${REQUIRED_ARTIFACT_PATHS.join(', ')}.
@@ -672,7 +672,7 @@ function formatSchemaContractForPrompt(includeFullSchemas = false) {
     `Validation mode in this browser: ${summary.validationMode}`,
     `Missing schemas: ${summary.missingSchemas.length ? summary.missingSchemas.join(', ') : 'none'}`,
     'Allowed Safe Beta0: field types string, uuid, integer, decimal, boolean, date; widgets text, textarea, checkbox, date, email; persistence operation save only; steps enforceInvariants, capabilityCall save, emitEvent with from, return; relationships use uuid ID fields, not reference; status uses string, not enum; endpoints use /api/flows, /api/flows/<FlowName>/execute, /api/audit, /api/correlations/{correlationId}.',
-    "Forbidden Safe Beta0: reference, enum, datetime, search-dialog, date('today'), today(), now(), includes(), regex(), any invariant function call, assign, findById, findAll, delete, object-shaped emitEvent.payload, CRUD endpoints under /api/v1, /api/clinic, or /api/<concept>.",
+    "Forbidden Safe Beta0: reference, enum, datetime, search-dialog, date('today'), today(), now(), includes(), regex(), any invariant function call, assign, findById, findAll, delete, object-shaped emitEvent.payload, versioned CRUD endpoint prefixes, clinic CRUD endpoints, or concept-specific CRUD endpoints.",
     'Required NPDev DSL shape: flow.input.concept, flow.input.mode, step.cap, step.op, step.args, step.out, return.value, enforceInvariants.scope, enforceInvariants.invariants, invariant.expr.',
     'Required emitEvent shape: { name, type: "emitEvent", event: "EventName", from: "$saved" }. Do not use payload, map, from: "EventName", or object-shaped payloads.',
     'Required NPDev manifest shape: sampleId, sampleName, category, description, primaryFlows. category must be safe-beta0-web-generated. Additional properties are allowed by the real schema, so inputFiles, walkthrough, expectedOutcomes, features, mainFlow, ownedConcepts, and verificationTargets may be preserved.',
@@ -1224,23 +1224,22 @@ function inspectSafeBeta0Violations(model, artifacts, endpointsContent) {
   const endpointText = typeof endpointsContent === 'string'
     ? endpointsContent
     : artifactContentToString(endpointsContent, 'expected-endpoints.md');
-  if (/(^|\s)(GET|POST|PUT|PATCH|DELETE)\s+\/api\/v1\b|\/api\/v1\b/i.test(endpointText)) {
-    errors.add('Safe Beta0 violation: expected-endpoints.md contains /api/v1 CRUD endpoints. Use flow endpoints only.');
-  }
-  if (/\/api\/clinic\b/i.test(endpointText)) {
-    errors.add('Safe Beta0 violation: expected-endpoints.md contains CRUD endpoints under /api/clinic. Use flow endpoints only.');
-  }
-  if (/\bDELETE\s+\//i.test(endpointText)) {
-    errors.add('Safe Beta0 violation: expected-endpoints.md contains DELETE endpoints. Safe Beta0 expected endpoints must not include deletes.');
-  }
-  if (/\bPUT\s+\/api\//i.test(endpointText)) {
-    errors.add('Safe Beta0 violation: expected-endpoints.md contains PUT /api/ endpoints. Use flow endpoints only.');
-  }
-  if (/\bGET\s+\/api\/(?!flows\b|audit\b|correlations\b)[^\s`]*\{id\}/i.test(endpointText)) {
-    errors.add('Safe Beta0 violation: expected-endpoints.md contains GET /api/.../{id} concept CRUD endpoints. Use flow endpoints only.');
-  }
-  if (/\bPOST\s+\/api\/(?!flows\/[^/\s`]+\/execute\b)[^\s`]+/i.test(endpointText)) {
-    errors.add('Safe Beta0 violation: expected-endpoints.md contains POST /api/... concept CRUD endpoints. Use /api/flows/<FlowName>/execute only.');
+
+  const endpointMatches = Array.from(endpointText.matchAll(/(?:^|\n)\s*(?:[-*]\s*)?(?:\*\*)?`?\s*(GET|POST|PUT|PATCH|DELETE)\s+([^\s`*),.;]+)/gi));
+
+  for (const match of endpointMatches) {
+    const method = String(match[1] || '').toUpperCase();
+    const path = String(match[2] || '').replace(/[.,;:]+$/g, '');
+    const endpoint = `${method} ${path}`;
+
+    const allowed = endpoint === 'GET /api/flows'
+      || endpoint === 'GET /api/audit'
+      || endpoint === 'GET /api/correlations/{correlationId}'
+      || /^POST \/api\/flows\/[^/\s`]+\/execute$/.test(endpoint);
+
+    if (!allowed) {
+      errors.add(`Safe Beta0 violation: expected-endpoints.md declares unsupported active endpoint ${endpoint}. Use flow endpoints only.`);
+    }
   }
 
   return [...errors];
@@ -2129,3 +2128,4 @@ function init() {
 }
 
 document.addEventListener('DOMContentLoaded', init);
+
