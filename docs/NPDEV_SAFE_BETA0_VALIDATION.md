@@ -10,23 +10,25 @@ Local NPDev schema validation and generator validation remain the final authorit
 
 ## Active Contract
 
-- Site build: `Web Download Filename 001`
+- Site build: `Web Manifest Alignment 001`
 - Site contract mode: `Safe Beta0`
 - Prompt contract: `NPDEV_PRECISE_FORMAT_GUIDE v4`
 - Bundle schema: `npdev-static-generator-artifact-bundle.v4`
 - Validation mode: `lightweight-contract-validation`
 
-Use `?v=download-filename-001` or a hard browser refresh when testing deployed Pages output to avoid stale cached JavaScript.
+Use `?v=web-manifest-alignment-001` or a hard browser refresh when testing deployed Pages output to avoid stale cached JavaScript.
 
 Checkpoint 003 uses compact schema guidance by default. The browser still loads schema metadata from `contracts/`, but normal Gemini requests include only schema names, hashes, Safe Beta0 rules, and a minimal artifact shape. The debug-only full schema prompt mode is off by default because it can exceed proxy limits.
 
 Checkpoint 003B calibrates the proxy limit separately from Gemini context size. Browser diagnostics classify request JSON size as OK under 64 KB, notice from 64-96 KB, warning from 96-128 KB, and blocked above the Worker hard limit of 128 KB. The Worker clamps requested output tokens to 32,000 and reports clamp diagnostics.
 
-Checkpoint 004 adds NPDev schema shape validation. Artifacts now fail when they avoid forbidden Safe Beta0 features but still invent site-local config paths, wrong flow property names, JavaScript-like invariant expressions, empty persistence bindings, or sample-style manifest keys that do not match this static artifact bundle handoff contract.
+Checkpoint 004 adds NPDev schema shape validation. Artifacts now fail when they avoid forbidden Safe Beta0 features but still invent site-local config paths, wrong flow property names, JavaScript-like invariant expressions, empty persistence bindings, or manifest shapes that do not match the current contract.
 
 Checkpoint 004B narrows capability validation so `eventBus.operations: ["emitEvent"]` is allowed. The `save`-only operation rule applies to the `persistence` capability. Object-shaped `emitEvent.payload` remains a hard failure.
 
 Checkpoint 004D makes the final prompt corrections for near-valid Safe Beta0 output: `trialDefaults.apiKey` must be exactly `dev-key`, real secrets are forbidden, and appointment future-date checks must be documented as limitations instead of implemented with function calls in `model.json`.
+
+Web Manifest Alignment 001 changes generated `manifest.json` to the real NPDev sample-manifest schema. The manifest must include `sampleId`, `sampleName`, `category`, `description`, and `primaryFlows`. The current real schema allows additional properties, so the website may preserve helpful web handoff metadata such as `inputFiles`, `walkthrough`, `expectedOutcomes`, `features`, `mainFlow`, `ownedConcepts`, and `verificationTargets`.
 
 ## Allowed Safe Beta0 Features
 
@@ -130,13 +132,21 @@ The browser rejects object-shaped `emitEvent.payload`. Do not use `payload`, `ma
 
 When persistence is used, `model.bindings` must include `persistence -> repository`. When events or `emitEvent` are present, it must include `eventBus -> inproc`.
 
-The static artifact bundle manifest currently uses `id`, `title`, `complexity`, `mainFlow`, `purpose`, `businessStory`, `features`, `inputFiles`, `walkthrough`, and `expectedOutcomes`. Sample-manifest keys such as `sampleId`, `sampleName`, `category`, `primaryFlows`, `ownedConcepts`, and `verificationTargets` are rejected for this handoff.
+The static artifact bundle manifest now uses the real NPDev sample-manifest shape:
+
+- `sampleId`
+- `sampleName`
+- `category`
+- `description`
+- `primaryFlows`
+
+For website-generated Safe Beta0 bundles, `category` must be `safe-beta0-web-generated`. `primaryFlows` must include at least one generated flow, with `mainFlow` included when the optional `mainFlow` field is present. Because the current real schema has `additionalProperties: true`, the site may also keep `inputFiles`, `walkthrough`, `expectedOutcomes`, `features`, `mainFlow`, `ownedConcepts`, and `verificationTargets`.
 
 ## Testing
 
 1. Serve the static site from the detected static site root.
 2. Open `http://localhost:8088`.
-3. Confirm the visible build label says `Web Download Filename 001`.
+3. Confirm the visible build label says `Web Manifest Alignment 001`.
 4. Use Mock provider and generate artifacts.
 5. Confirm the validation box says `Safe Beta0 validation: PASSED`.
 6. Preview the prompt and confirm it says `npdev-static-generator-artifact-bundle.v4`, `SAFE BETA0 HARD RULES`, forbidden advanced features, and safe fallbacks.
@@ -145,7 +155,7 @@ The static artifact bundle manifest currently uses `id`, `title`, `complexity`, 
 9. Load `tests/fixtures/schema-shape-invalid-clinic-appointment-v4.json` through the validation path.
 10. Confirm validation fails and errors mention wrong config paths, wrong flow shape, JavaScript-like invariants, empty bindings, and manifest shape mismatch.
 11. Load `tests/fixtures/schema-shape-invalid-manifest-and-event-payload.json` through the validation path.
-12. Confirm validation fails for missing manifest keys, sample-manifest keys, and object-shaped `emitEvent.payload`, but does not report `eventBus includes emitEvent`.
+12. Confirm validation fails for missing NPDev manifest keys and object-shaped `emitEvent.payload`, but does not report `eventBus includes emitEvent`.
 13. Load `tests/fixtures/near-valid-api-key-and-date-function.json` through the validation path.
 14. Confirm validation fails only for `trialDefaults.apiKey` and the `AppointmentDateFuture` function call.
 

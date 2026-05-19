@@ -6,6 +6,7 @@ Web Checkpoint 003B raises the Worker request-body hard limit to 128 KB while ke
 Web Checkpoint 004 adds lightweight NPDev schema shape checks for config paths, flow property names, invariant expressions, bindings, and manifest handoff shape.
 Web Checkpoint 004B fixes capability validation precision so `eventBus.emitEvent` is allowed while persistence remains `save`-only.
 Web Checkpoint 004D tightens the prompt and repair guidance for the final near-valid failures: API key placeholders and date function calls in invariants.
+Web Manifest Alignment 001 updates website-generated `manifest.json` to match the real NPDev sample-manifest schema while preserving useful web handoff metadata through schema-allowed additional properties.
 
 ## Detected Paths
 
@@ -60,8 +61,10 @@ Safe Beta0 violations are errors, not warnings. They include `reference`, `enum`
 
 The active outer bundle schema is now `npdev-static-generator-artifact-bundle.v4`. Responses using the older `npdev-static-generator-artifact-bundle.v2` schema are invalid and show a stale-contract error mentioning browser cache, stale deployed `app.js`, or Gemini ignoring the contract.
 
-Checkpoint 004 also rejects artifacts that look conservative but use the wrong shape, such as `flow.concept`, field-map `flow.input`, `step.capability`, `step.operation`, `step.map`, `invariant.expression`, JavaScript-like invariant expressions, empty persistence bindings, website-local config paths, or sample-style manifest keys such as `sampleId`, `category`, and `primaryFlows`.
+Checkpoint 004 also rejects artifacts that look conservative but use the wrong shape, such as `flow.concept`, field-map `flow.input`, `step.capability`, `step.operation`, `step.map`, `invariant.expression`, JavaScript-like invariant expressions, empty persistence bindings, website-local config paths, or manifest shapes that do not match the active contract.
 
-Checkpoint 004B keeps object-shaped `emitEvent.payload` as a hard failure, but no longer rejects an `EventBusCapability` merely because it declares `operations: ["emitEvent"]`. The prompt now asks for canonical event steps with `event: "EventName"` and `from: "$saved"`, and for the current static artifact manifest shape rather than sample-manifest keys.
+Checkpoint 004B keeps object-shaped `emitEvent.payload` as a hard failure, but no longer rejects an `EventBusCapability` merely because it declares `operations: ["emitEvent"]`. The prompt now asks for canonical event steps with `event: "EventName"` and `from: "$saved"`.
 
 Checkpoint 004D requires `config.json` `trialDefaults.apiKey` to be exactly `dev-key` and rejects placeholders, empty values, and real secrets in that field. It also rejects invariant function calls such as `date('today')`, `today()`, `now()`, `includes()`, and `regex()`. Appointment future-date validation should be documented in `generation-notes.md` and `qualityGates.riskNotes`, not enforced in `model.json`.
+
+Web Manifest Alignment 001 makes the browser prompt, mock provider, repair guidance, and lightweight validator require the real NPDev manifest keys: `sampleId`, `sampleName`, `category`, `description`, and `primaryFlows`. The real schema currently allows additional properties, so the site may keep `inputFiles`, `walkthrough`, `expectedOutcomes`, `features`, `mainFlow`, `ownedConcepts`, and `verificationTargets`. `manifest.inputFiles` entries are still cross-checked against `artifacts[]` when present.

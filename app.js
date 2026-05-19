@@ -16,7 +16,7 @@ const state = {
   }
 };
 
-const SITE_BUILD_LABEL = 'Web Download Filename 001';
+const SITE_BUILD_LABEL = 'Web Manifest Alignment 001';
 const CONTRACT_MODE = 'Safe Beta0';
 const PROMPT_CONTRACT_VERSION = 'NPDEV_PRECISE_FORMAT_GUIDE v4';
 const ARTIFACT_BUNDLE_SCHEMA_VERSION = 'npdev-static-generator-artifact-bundle.v4';
@@ -242,13 +242,20 @@ const NPDEV_RESPONSE_SCHEMA_HINT = {
     {
       path: 'manifest.json',
       content: {
-        id: 'scenario-id',
-        title: 'Human title',
-        complexity: 'simple|medium|tenant',
-        mainFlow: 'PascalCaseFlowName',
-        purpose: 'string',
-        businessStory: 'string',
+        sampleId: 'scenario-id',
+        sampleName: 'Human title',
+        category: 'safe-beta0-web-generated',
+        description: 'string',
+        primaryFlows: ['PascalCaseFlowName'],
+        ownedConcepts: ['PascalCaseConcept'],
+        verificationTargets: [
+          'GET /api/flows',
+          'POST /api/flows/PascalCaseFlowName/execute',
+          'GET /api/audit',
+          'GET /api/correlations/{correlationId}'
+        ],
         features: ['concept', 'invariants', 'persistence', 'event', 'trace'],
+        mainFlow: 'PascalCaseFlowName',
         inputFiles: ['input/example-request.json'],
         walkthrough: ['string'],
         expectedOutcomes: ['string']
@@ -567,8 +574,13 @@ Do not use:
 If event emission is uncertain, omit the emitEvent step and document the limitation in generation-notes.md.
 
 Manifest shape rules:
-- Use id, title, complexity, mainFlow, purpose, businessStory, features, inputFiles, walkthrough, expectedOutcomes.
-- Do not use sampleId, sampleName, category, primaryFlows, ownedConcepts, or verificationTargets.
+- Use the real NPDev manifest schema shape: sampleId, sampleName, category, description, primaryFlows.
+- category must be "safe-beta0-web-generated".
+- sampleId comes from project.scenarioId.
+- sampleName comes from project.name.
+- description comes from the objective or business story.
+- primaryFlows must list generated model flow names with the main flow first.
+- Because manifest.schema.json allows additional properties, also preserve helpful fields when useful: ownedConcepts, verificationTargets, inputFiles, walkthrough, expectedOutcomes, features, mainFlow.
 
 API key and secret rules:
 - config.json trialDefaults.apiKey must be exactly "dev-key".
@@ -615,7 +627,7 @@ CRITICAL FORMAT RULES:
    - events[] when useful
    - flows[] with steps such as enforceInvariants, capabilityCall, emitEvent, return
    - queries/procedures/panels only if the objective needs them and they stay declarative
-10. manifest.json must include id, title, complexity, mainFlow, purpose, businessStory, features, inputFiles, walkthrough, expectedOutcomes.
+10. manifest.json must include sampleId, sampleName, category, description, primaryFlows. It may also include ownedConcepts, verificationTargets, inputFiles, walkthrough, expectedOutcomes, features, and mainFlow because the real NPDev schema allows additional properties.
 11. expected-behavior.md and expected-endpoints.md must explain what NPDev runtime should expose and how to validate it.
 12. Do not output Java, TypeScript, SQL, Gradle, or Docker files.
 13. Do not invent unsupported custom runtime code.
@@ -625,7 +637,7 @@ CRITICAL FORMAT RULES:
 17. qualityGates.validationMode must be "${VALIDATION_MODE}".
 18. qualityGates.requiredArtifacts must list ${REQUIRED_ARTIFACT_PATHS.join(', ')}.
 19. qualityGates.safeBeta0Restrictions must list the Safe Beta0 restrictions above.
-20. manifest.inputFiles must reference only files also present in artifacts[]. Use input/example-request.json if you include a sample input.
+20. manifest.inputFiles, when present, must reference only files also present in artifacts[]. Keep input/example-request.json as an artifact even if manifest inputFiles is omitted in a future schema.
 21. expected-endpoints.md must list only conservative runtime endpoints: GET /api/flows, POST /api/flows/<FlowName>/execute, GET /api/audit, GET /api/correlations/{correlationId}.
 22. Keep the model small. Prefer 1 to 4 concepts and 1 to 3 flows.
 23. Use valid JSON only. JSON.parse must succeed.
@@ -663,7 +675,7 @@ function formatSchemaContractForPrompt(includeFullSchemas = false) {
     "Forbidden Safe Beta0: reference, enum, datetime, search-dialog, date('today'), today(), now(), includes(), regex(), any invariant function call, assign, findById, findAll, delete, object-shaped emitEvent.payload, CRUD endpoints under /api/v1, /api/clinic, or /api/<concept>.",
     'Required NPDev DSL shape: flow.input.concept, flow.input.mode, step.cap, step.op, step.args, step.out, return.value, enforceInvariants.scope, enforceInvariants.invariants, invariant.expr.',
     'Required emitEvent shape: { name, type: "emitEvent", event: "EventName", from: "$saved" }. Do not use payload, map, from: "EventName", or object-shaped payloads.',
-    'Required manifest shape: id, title, complexity, mainFlow, purpose, businessStory, features, inputFiles, walkthrough, expectedOutcomes. Do not use sampleId, sampleName, category, primaryFlows, ownedConcepts, or verificationTargets.',
+    'Required NPDev manifest shape: sampleId, sampleName, category, description, primaryFlows. category must be safe-beta0-web-generated. Additional properties are allowed by the real schema, so inputFiles, walkthrough, expectedOutcomes, features, mainFlow, ownedConcepts, and verificationTargets may be preserved.',
     'Required API key placeholder: config.json trialDefaults.apiKey must be exactly "dev-key"; do not use YOUR_API_KEY, YOUR_API_KEY_HERE, placeholder, real keys, or empty strings; do not generate real secrets.',
     'Appointment date invariant: use AppointmentDateRequired with expr "appointmentDate != null"; do not enforce future-date in model.json; document future-date validation as a Safe Beta0 limitation in generation-notes.md and qualityGates.riskNotes.',
     'Forbidden invented shape: flow.concept, field-map input objects, step.capability, step.operation, step.map, invariant.expression, JavaScript expressions such as .includes(), array literals, or function calls.',
@@ -688,7 +700,7 @@ function buildCompactArtifactShapeGuide() {
   "artifacts": [
     { "path": "config.json", "content": { "$schema": "..\\\\..\\\\NPDevContract\\\\schemas\\\\config.schema.json", "configVersion": "1.0", "scenario": { "name": "kebab-case", "outputRoot": "..\\\\Output" }, "generator": {}, "bootstrap": { "root": "..\\\\..\\\\NPDevRuntimeHost", "mergeStrategy": "clean-copy" }, "artifact": { "root": "..\\\\Output\\\\ArtifactNP", "generatedFolderName": "npdev-generated", "libsFolderName": "libs", "metaFolderName": "npdev-meta" }, "finalExec": { "root": "..\\\\Output\\\\App" }, "database": {}, "runtime": { "springProfile": "dev,step0,trial" }, "trialDefaults": { "apiKey": "dev-key" } } },
     { "path": "model.json", "content": { "$schema": "contracts/model.schema.json", "namespace": "trial.example", "dslVersion": "1.0.0", "version": "1.0", "concepts": [{ "name": "Appointment", "fields": [{ "name": "patientId", "type": "uuid", "ui": { "label": "Patient ID", "widget": "text" } }], "invariants": [{ "name": "AppointmentPatientRequired", "expr": "patientId != null && patientId != ''" }] }], "capabilities": [{ "name": "persistence", "type": "PersistenceCapability", "operations": ["save"] }], "bindings": [{ "capability": "persistence", "adapter": "repository" }, { "capability": "eventBus", "adapter": "inproc" }], "events": [], "flows": [{ "name": "ScheduleAppointment", "input": { "concept": "Appointment", "mode": "create" }, "steps": [{ "name": "validate-input", "type": "enforceInvariants", "scope": "Appointment", "invariants": ["AppointmentPatientRequired"] }, { "name": "save-record", "type": "capabilityCall", "cap": "persistence", "op": "save", "args": ["$input"], "out": "$saved" }, { "name": "return-record", "type": "return", "value": "$saved" }] }] } },
-    { "path": "manifest.json", "content": { "id": "kebab-case", "title": "...", "complexity": "simple", "mainFlow": "...", "purpose": "...", "businessStory": "...", "features": [], "inputFiles": ["input/example-request.json"], "walkthrough": [], "expectedOutcomes": [] } },
+    { "path": "manifest.json", "content": { "sampleId": "kebab-case", "sampleName": "...", "category": "safe-beta0-web-generated", "description": "...", "primaryFlows": ["ScheduleAppointment"], "ownedConcepts": ["Appointment"], "verificationTargets": ["GET /api/flows", "POST /api/flows/ScheduleAppointment/execute", "GET /api/audit", "GET /api/correlations/{correlationId}"], "inputFiles": ["input/example-request.json"], "walkthrough": [], "expectedOutcomes": [], "features": [], "mainFlow": "ScheduleAppointment" } },
     { "path": "expected-behavior.md", "content": "..." },
     { "path": "expected-endpoints.md", "content": "Only /api/flows, /api/flows/<FlowName>/execute, /api/audit, /api/correlations/{correlationId}." },
     { "path": "generation-notes.md", "content": "..." },
@@ -1401,22 +1413,32 @@ function inspectInvariantExpression(expr, invariantName) {
 
 function inspectManifestShape(manifest) {
   const errors = [];
-  const required = ['id', 'title', 'complexity', 'mainFlow', 'purpose', 'businessStory', 'features', 'inputFiles', 'walkthrough', 'expectedOutcomes'];
-  const alternativeKeys = ['sampleId', 'sampleName', 'category', 'primaryFlows', 'ownedConcepts', 'verificationTargets'];
+  const required = ['sampleId', 'sampleName', 'category', 'description', 'primaryFlows'];
+  const requiredStrings = ['sampleId', 'sampleName', 'category', 'description'];
 
   for (const key of required) {
     if (!Object.prototype.hasOwnProperty.call(manifest, key)) {
       errors.push(`manifest.json must include ${key}.`);
     }
   }
-  for (const key of ['features', 'inputFiles', 'walkthrough', 'expectedOutcomes']) {
+  for (const key of requiredStrings) {
+    if (Object.prototype.hasOwnProperty.call(manifest, key) && (!manifest[key] || typeof manifest[key] !== 'string')) {
+      errors.push(`manifest.json ${key} must be a non-empty string.`);
+    }
+  }
+  if (manifest.category && manifest.category !== 'safe-beta0-web-generated') {
+    errors.push('manifest.json category must be safe-beta0-web-generated for website-generated Safe Beta0 artifacts.');
+  }
+  for (const key of ['primaryFlows', 'ownedConcepts', 'verificationTargets', 'features', 'inputFiles', 'walkthrough', 'expectedOutcomes']) {
     if (Object.prototype.hasOwnProperty.call(manifest, key) && !Array.isArray(manifest[key])) {
       errors.push(`manifest.json ${key} must be an array.`);
     }
   }
-  const presentAlternatives = alternativeKeys.filter((key) => Object.prototype.hasOwnProperty.call(manifest, key));
-  if (presentAlternatives.length) {
-    errors.push(`Safe Beta0 schema shape violation: manifest.json uses sample-manifest keys ${presentAlternatives.join(', ')}. Use id, title, complexity, mainFlow, purpose, businessStory, features, inputFiles, walkthrough, expectedOutcomes.`);
+  if (Array.isArray(manifest.primaryFlows) && !manifest.primaryFlows.length) {
+    errors.push('manifest.json primaryFlows must include at least one flow name.');
+  }
+  if (typeof manifest.mainFlow === 'string' && Array.isArray(manifest.primaryFlows) && !manifest.primaryFlows.includes(manifest.mainFlow)) {
+    errors.push('manifest.json primaryFlows must include mainFlow when mainFlow is present.');
   }
 
   return errors;
@@ -1556,6 +1578,7 @@ function buildMockBundle(input) {
   const namespace = `trial.${scenarioId.replace(/-/g, '')}`;
   const objective = input.objective || 'Manage patients, doctors, and appointment scheduling with validation and runtime evidence.';
   const entities = input.entities.length ? input.entities : ['Patient', 'Doctor', 'Appointment'];
+  const conceptNames = entities.map((entityName) => toPascalCase(entityName));
   const mainFlow = input.mainFlow || 'ScheduleAppointment';
 
   return {
@@ -1675,12 +1698,20 @@ function buildMockBundle(input) {
       {
         path: 'manifest.json',
         content: {
-          id: scenarioId,
-          title: name,
+          sampleId: scenarioId,
+          sampleName: name,
+          category: 'safe-beta0-web-generated',
+          description: objective,
+          primaryFlows: [mainFlow],
+          ownedConcepts: conceptNames,
+          verificationTargets: [
+            'GET /api/flows',
+            `POST /api/flows/${mainFlow}/execute`,
+            'GET /api/audit',
+            'GET /api/correlations/{correlationId}'
+          ],
           complexity: input.complexity || 'simple',
           mainFlow,
-          purpose: `Generate a Beta0 NPDev sample for ${name}.`,
-          businessStory: objective,
           features: ['concept', 'invariants', 'persistence', 'event', 'trace'],
           inputFiles: ['input/example-request.json'],
           walkthrough: [
@@ -1936,8 +1967,8 @@ ${raw}
 function buildTargetedRepairGuidance(errors) {
   const text = errors.join('\n');
   const guidance = [];
-  if (/manifest\.json|sample-manifest|sampleId|sampleName|primaryFlows|ownedConcepts|verificationTargets/i.test(text)) {
-    guidance.push(`\nManifest repair:\n- Replace sampleId with id.\n- Replace sampleName with title.\n- Choose mainFlow from the first primary flow, or use ScheduleAppointment when no better value exists.\n- Convert primaryFlows, ownedConcepts, and verificationTargets into features, walkthrough, or expectedOutcomes only if useful.\n- Add complexity, purpose, and businessStory.\n- Keep inputFiles as an array and ensure every path exists in artifacts[].`);
+  if (/manifest\.json|sample-manifest|sampleId|sampleName|category|description|primaryFlows|ownedConcepts|verificationTargets|\bid\b|\btitle\b|\bmainFlow\b/i.test(text)) {
+    guidance.push(`\nManifest repair:\n- Use the real NPDev manifest schema keys: sampleId, sampleName, category, description, and primaryFlows.\n- Replace id with sampleId.\n- Replace title with sampleName.\n- Set category to "safe-beta0-web-generated".\n- Set description from purpose, businessStory, or the project objective.\n- Convert mainFlow into primaryFlows: [mainFlow], and include every model flow name with the main flow first.\n- Preserve inputFiles, walkthrough, expectedOutcomes, features, mainFlow, ownedConcepts, and verificationTargets when useful because the current NPDev manifest schema allows additional properties.\n- Keep inputFiles as an array and ensure every path exists in artifacts[].`);
   }
   if (/emitEvent\.payload|object-shaped/i.test(text)) {
     guidance.push(`\nEvent repair:\n- Replace object-shaped emitEvent payload steps like { "type": "emitEvent", "from": "AppointmentScheduledEvent", "payload": { ... } } with { "name": "emit-event", "type": "emitEvent", "event": "AppointmentScheduledEvent", "from": "$savedAppointment" }.\n- Do not use payload, map, or from: "EventName" on emitEvent steps.`);

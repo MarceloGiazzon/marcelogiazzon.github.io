@@ -218,12 +218,24 @@
     {
       "path": "manifest.json",
       "content": {
-        "id": "clinic-appointment-manager",
-        "title": "Clinic Appointment Manager",
+        "sampleId": "clinic-appointment-manager",
+        "sampleName": "Clinic Appointment Manager",
+        "category": "safe-beta0-web-generated",
+        "description": "Receptionists schedule appointments for patients and doctors.",
+        "primaryFlows": [
+          "ScheduleAppointment"
+        ],
+        "ownedConcepts": [
+          "Appointment"
+        ],
+        "verificationTargets": [
+          "GET /api/flows",
+          "POST /api/flows/ScheduleAppointment/execute",
+          "GET /api/audit",
+          "GET /api/correlations/{correlationId}"
+        ],
         "complexity": "simple",
         "mainFlow": "ScheduleAppointment",
-        "purpose": "Generate a Safe Beta0 clinic appointment sample.",
-        "businessStory": "Receptionists schedule appointments for patients and doctors.",
         "features": [
           "concept",
           "invariants",
